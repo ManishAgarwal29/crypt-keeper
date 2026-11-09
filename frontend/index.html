@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>⚰️ Crypt Keeper — Revive the Dead</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="fog" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <h1>⚰️ Crypt&nbsp;Keeper</h1>
+    <p class="tagline">Every dead package deserves a second life.</p>
+  </header>
+
+  <main>
+    <section class="graveyard" aria-labelledby="exhume-heading">
+      <h2 id="exhume-heading">Exhume a package</h2>
+      <form id="exhume-form" class="exhume-form">
+        <label for="target">PyPI package name or GitHub URL</label>
+        <div class="input-row">
+          <input
+            id="target"
+            name="target"
+            type="text"
+            placeholder="e.g. some-abandoned-package"
+            autocomplete="off"
+            required
+          />
+          <button type="submit">🪦 Raise it</button>
+        </div>
+      </form>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="results" class="results" hidden aria-live="polite">
+      <article class="panel autopsy">
+        <h3>🔍 Autopsy report</h3>
+        <div id="autopsy-body"></div>
+      </article>
+
+      <article class="panel revival">
+        <h3>🧟 Resurrection</h3>
+        <div id="revival-body"></div>
+      </article>
+
+      <article class="panel proof">
+        <h3>💓 Proof of life</h3>
+        <div id="proof-body"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Built with Kiro for Kiroween 2026 · Frankenstein category</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

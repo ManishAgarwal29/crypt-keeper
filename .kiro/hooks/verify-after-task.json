@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Verify tests after task",
+      "trigger": "PostTaskExec",
+      "description": "Runs the full backend test suite after a spec task is marked completed, to keep every task green.",
+      "action": {
+        "type": "command",
+        "command": "cd backend; python -m pytest -q"
+      }
+    }
+  ]
+}
