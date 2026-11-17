@@ -49,7 +49,7 @@
     smoke test; return `ProofOfLife`.
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 11. API layer
+- [x] 11. API layer
   - Wire `POST /exhume`, `/autopsy`, `/resurrect`, `/proof-of-life`, and the combined
     `/revive` endpoint. Typed responses + themed error handling.
   - _Requirements: 1.3, 2.4, 3.4, 4.1_

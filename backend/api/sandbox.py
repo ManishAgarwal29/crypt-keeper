@@ -208,11 +208,15 @@ def _tail(text: str, limit: int = LOG_TAIL) -> str:
     return text if len(text) <= limit else "..." + text[-limit:]
 
 
+def proof_enabled() -> bool:
+    return os.environ.get(ENABLE_ENV, "on").strip().lower() not in ("off", "0", "false", "no")
+
+
 def run_proof_of_life(snapshot: PackageSnapshot, target_python: str = "3.12") -> ProofOfLife:
     """Import the (revived) package in a sandbox and run its tests, or a generated smoke test."""
     started = time.monotonic()
-    if os.environ.get(ENABLE_ENV, "on").strip().lower() in ("off", "0", "false", "no"):
-        return ProofOfLife(imported=False, error=f"Proof of life is disabled ({ENABLE_ENV}=off).")
+    if not proof_enabled():
+        return ProofOfLife(imported=False, skipped=True, error=f"Proof of life is disabled ({ENABLE_ENV}=off).")
     try:
         result = _run(snapshot, target_python, started)
     except Exception as exc:  # a sandbox failure must never take the API down

@@ -114,3 +114,48 @@ class ProofOfLife(BaseModel):
     )
     output: str = Field(default="", description="tail of the sandbox logs")
     duration_seconds: float = 0.0
+    skipped: bool = Field(default=False, description="True when no check ran (for example, the sandbox is disabled)")
+
+
+Verdict = Literal["resurrected", "improved", "already_alive", "still_dead", "regressed", "unverified"]
+
+
+class PackageSummary(BaseModel):
+    """What was exhumed, without the source itself."""
+
+    identifier: str
+    source: Source
+    last_release_date: str | None = None
+    declared_pythons: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    file_count: int = 0
+    truncated: bool = False
+
+    @classmethod
+    def from_snapshot(cls, snapshot: PackageSnapshot) -> "PackageSummary":
+        return cls(
+            identifier=snapshot.ref.identifier,
+            source=snapshot.ref.source,
+            last_release_date=snapshot.last_release_date,
+            declared_pythons=snapshot.declared_pythons,
+            dependencies=snapshot.dependencies,
+            file_count=len(snapshot.source_map),
+            truncated=snapshot.truncated,
+        )
+
+
+class ReviveResponse(BaseModel):
+    """The whole pipeline in one payload: what the UI renders."""
+
+    package: PackageSummary
+    autopsy: AutopsyReport
+    revival: RevivalResult
+    proof_before: ProofOfLife | None = Field(default=None, description="the original package, if it was checked")
+    proof_after: ProofOfLife | None = Field(default=None, description="the revived package, if it was checked")
+    verdict: Verdict
+    verdict_reason: str
+    timings: dict[str, float] = Field(default_factory=dict, description="seconds spent per stage")
+
+
+class ErrorResponse(BaseModel):
+    detail: str
