@@ -5,6 +5,8 @@ never-drop-a-module, no-pin-below-floor). See .kiro/specs/crypt-keeper-core/desi
 """
 from __future__ import annotations
 
+import difflib
+
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import Specifier, SpecifierSet
 from packaging.utils import canonicalize_name
@@ -119,7 +121,13 @@ def _cap_prefix(spec: Specifier) -> Version:
 
 
 def revive(snapshot: PackageSnapshot, report: AutopsyReport) -> RevivalResult:
-    """Apply all revival transforms, producing diffs and an applied/manual log."""
+    """Apply all revival transforms to a snapshot.
+
+    Returns the revived dependency constraints, a diff for every changed file, a log of what
+    was applied, and the manual items that still need a human. Pure and deterministic: files
+    are processed in path order, dependencies keep their order, and nothing is removed from
+    the snapshot (see `revived_snapshot`). Reviving an already revived snapshot changes nothing.
+    """
     diffs: list[FileDiff] = []
     applied: list[str] = []
     manual: list[str] = []
@@ -130,11 +138,40 @@ def revive(snapshot: PackageSnapshot, report: AutopsyReport) -> RevivalResult:
     applied += dep_applied
     manual += dep_manual
 
-    for path, content in snapshot.source_map.items():
+    for path in sorted(snapshot.source_map):
+        content = snapshot.source_map[path]
         new_content, file_applied, file_manual = rewrite_deprecated(content, report.target_python, path)
         if new_content != content:
-            diffs.append(FileDiff(path=path, before=content, after=new_content))
+            diffs.append(_file_diff(path, content, new_content))
         applied += file_applied
         manual += file_manual
 
-    return RevivalResult(diffs=diffs, applied=applied, manual_items=manual)
+    return RevivalResult(diffs=diffs, dependencies=new_deps, applied=applied, manual_items=manual)
+
+
+def revived_snapshot(snapshot: PackageSnapshot, result: RevivalResult) -> PackageSnapshot:
+    """The snapshot with a revival applied: every original file kept, changed files replaced.
+
+    This is what the proof-of-life runner imports. The input snapshot is not modified.
+    """
+    source_map = dict(snapshot.source_map)
+    for diff in result.diffs:
+        source_map[diff.path] = diff.after
+    return snapshot.model_copy(update={
+        "source_map": source_map,
+        "dependencies": list(result.dependencies) or list(snapshot.dependencies),
+    })
+
+
+def _file_diff(path: str, before: str, after: str) -> FileDiff:
+    lines = list(difflib.unified_diff(
+        before.splitlines(), after.splitlines(),
+        fromfile=f"a/{path}", tofile=f"b/{path}", lineterm="",
+    ))
+    body = lines[2:]  # skip the two file header lines
+    return FileDiff(
+        path=path, before=before, after=after,
+        unified="\n".join(lines),
+        lines_added=sum(1 for line in body if line.startswith("+")),
+        lines_removed=sum(1 for line in body if line.startswith("-")),
+    )

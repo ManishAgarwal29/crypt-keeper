@@ -35,7 +35,7 @@
   - Property tests: idempotent; never drops a module path.
   - _Requirements: 3.2, 3.3_
 
-- [ ] 8. Necromancer: assemble revival + diff
+- [x] 8. Necromancer: assemble revival + diff
   - Implement `revive` producing `RevivalResult` with per-file diffs.
   - _Requirements: 3.4_
 

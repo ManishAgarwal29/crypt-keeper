@@ -76,10 +76,19 @@ class FileDiff(BaseModel):
     path: str
     before: str
     after: str
+    unified: str = Field(default="", description="unified diff of before -> after")
+    lines_added: int = 0
+    lines_removed: int = 0
 
 
 class RevivalResult(BaseModel):
-    diffs: list[FileDiff] = Field(default_factory=list)
+    diffs: list[FileDiff] = Field(
+        default_factory=list, description="changed files only, ordered by path"
+    )
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="revived dependency constraints, one per dependency in the snapshot, same order",
+    )
     applied: list[str] = Field(default_factory=list)
     manual_items: list[str] = Field(default_factory=list)
 
