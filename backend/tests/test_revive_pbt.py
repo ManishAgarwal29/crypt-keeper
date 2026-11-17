@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 from necromancer.revive import bump_dependencies, rewrite_deprecated
 
 # A dependency line like "name==1.2.3"
-dep_names = st.from_regex(r"[a-zA-Z][a-zA-Z0-9_-]{0,15}", fullmatch=True)
+dep_names = st.from_regex(r"[a-zA-Z]([a-zA-Z0-9_-]{0,14}[a-zA-Z0-9])?", fullmatch=True)
 versions = st.from_regex(r"[0-9]{1,3}(\.[0-9]{1,3}){0,2}", fullmatch=True)
 pinned_deps = st.builds(lambda n, v: f"{n}=={v}", dep_names, versions)
 

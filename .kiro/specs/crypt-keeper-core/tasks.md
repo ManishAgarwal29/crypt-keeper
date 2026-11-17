@@ -25,7 +25,7 @@
   - Implement `run_autopsy` composing the above into an `AutopsyReport`.
   - _Requirements: 2.4_
 
-- [ ] 6. Necromancer: dependency bumping
+- [x] 6. Necromancer: dependency bumping
   - Implement `bump_dependencies` (pure). Record applied vs manual.
   - Property tests: no pin below floor; idempotent.
   - _Requirements: 3.1, 3.3_
