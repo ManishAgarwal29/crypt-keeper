@@ -54,7 +54,7 @@
     `/revive` endpoint. Typed responses + themed error handling.
   - _Requirements: 1.3, 2.4, 3.4, 4.1_
 
-- [ ] 12. Haunted web UI
+- [x] 12. Haunted web UI
   - Build `index.html`, `style.css`, `app.js`: graveyard input, autopsy report view,
     before/after diff, proof-of-life result. Keep it accessible.
   - _Requirements: 5.1, 5.2, 5.3, 5.4_

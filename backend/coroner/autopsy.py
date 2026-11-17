@@ -68,10 +68,13 @@ def _python_support_gap(declared: list[str], target_python: str) -> str | None:
     if newest >= target:
         return None
     if newest[0] < target[0]:
-        return f"declares Python up to {newest[0]}.{newest[1]} only, but the target is {target[0]}.{target[1]}"
+        return f"It declares Python up to {newest[0]}.{newest[1]} only, but the target is {target[0]}.{target[1]}."
     lag = target[1] - newest[1]
     if lag >= PYTHON_LAG_MINORS:
-        return f"newest declared Python is {newest[0]}.{newest[1]}, {lag} versions behind the target {target[0]}.{target[1]}"
+        return (
+            f"The newest Python it declares is {newest[0]}.{newest[1]}, "
+            f"{lag} versions behind the target {target[0]}.{target[1]}."
+        )
     return None
 
 
@@ -209,7 +212,7 @@ def run_autopsy(
     gap = _python_support_gap(snapshot.declared_pythons, target_python)
     if gap:
         findings.append(Finding(
-            kind="python-support-gap", severity="medium", message=f"This package {gap}.",
+            kind="python-support-gap", severity="medium", message=gap,
         ))
     findings += analyze_dependencies(snapshot.dependencies, now, snapshot.dependency_info)
     findings += detect_deprecated_apis(snapshot.source_map, target_python)

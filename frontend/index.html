@@ -2,60 +2,81 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>⚰️ Crypt Keeper — Revive the Dead</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="Crypt Keeper digs up abandoned Python packages, finds the cause of death, rewrites what blocks modern Python, and proves the result runs." />
+  <title>Crypt Keeper: revive abandoned Python packages</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M7 29V14a9 9 0 0 1 18 0v15z' fill='%2312141c' stroke='%237cff9b' stroke-width='2'/%3E%3Cpath d='M16 11v9M12 14h8' stroke='%237cff9b' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="style.css" />
+  <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="fog" aria-hidden="true"></div>
+  <a class="skip-link" href="#main">Skip to the crypt</a>
+  <div class="moon" aria-hidden="true"></div>
+  <div class="fog fog-1" aria-hidden="true"></div>
+  <div class="fog fog-2" aria-hidden="true"></div>
 
   <header class="site-header">
-    <h1>⚰️ Crypt&nbsp;Keeper</h1>
-    <p class="tagline">Every dead package deserves a second life.</p>
+    <p class="eyebrow">Kiroween 2026 &middot; Frankenstein</p>
+    <h1>Crypt Keeper</h1>
+    <p class="tagline">Dig up an abandoned Python package. Watch it breathe again.</p>
   </header>
 
-  <main>
-    <section class="graveyard" aria-labelledby="exhume-heading">
+  <main id="main">
+    <section class="panel graveyard" aria-labelledby="exhume-heading">
       <h2 id="exhume-heading">Exhume a package</h2>
-      <form id="exhume-form" class="exhume-form">
-        <label for="target">PyPI package name or GitHub URL</label>
-        <div class="input-row">
-          <input
-            id="target"
-            name="target"
-            type="text"
-            placeholder="e.g. some-abandoned-package"
-            autocomplete="off"
-            required
-          />
-          <button type="submit">🪦 Raise it</button>
+
+      <form id="exhume-form" class="exhume-form" novalidate>
+        <div class="field field-grow">
+          <label for="target">PyPI package name or GitHub repository URL</label>
+          <input id="target" name="target" type="text" placeholder="unittest2" autocomplete="off"
+                 autocapitalize="off" spellcheck="false" required aria-describedby="input-error" />
         </div>
+        <div class="field">
+          <label for="python">Target Python</label>
+          <select id="python" name="python">
+            <option value="3.13">3.13</option>
+            <option value="3.12" selected>3.12</option>
+            <option value="3.11">3.11</option>
+            <option value="3.10">3.10</option>
+            <option value="3.9">3.9</option>
+          </select>
+        </div>
+        <button type="submit" id="raise" class="button">Raise it</button>
       </form>
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <p id="input-error" class="field-error" role="alert" hidden></p>
+      <p id="python-hint" class="hint" role="status"></p>
+
+      <div class="headstones">
+        <p id="headstones-label" class="hint">Or pick a headstone:</p>
+        <ul class="headstone-list" aria-labelledby="headstones-label">
+          <li><button type="button" class="headstone" data-package="unittest2"><span class="cross" aria-hidden="true">&#10013;</span>unittest2</button></li>
+          <li><button type="button" class="headstone" data-package="boto"><span class="cross" aria-hidden="true">&#10013;</span>boto</button></li>
+          <li><button type="button" class="headstone" data-package="Flask-Script"><span class="cross" aria-hidden="true">&#10013;</span>Flask-Script</button></li>
+          <li><button type="button" class="headstone" data-package="nose"><span class="cross" aria-hidden="true">&#10013;</span>nose</button></li>
+        </ul>
+      </div>
     </section>
 
-    <section id="results" class="results" hidden aria-live="polite">
-      <article class="panel autopsy">
-        <h3>🔍 Autopsy report</h3>
-        <div id="autopsy-body"></div>
-      </article>
-
-      <article class="panel revival">
-        <h3>🧟 Resurrection</h3>
-        <div id="revival-body"></div>
-      </article>
-
-      <article class="panel proof">
-        <h3>💓 Proof of life</h3>
-        <div id="proof-body"></div>
-      </article>
+    <section id="ritual" class="panel" aria-labelledby="ritual-heading" hidden>
+      <h2 id="ritual-heading">The ritual</h2>
+      <ol id="stages" class="stages" aria-live="polite"></ol>
+      <p id="run-error" class="run-error" role="alert" hidden></p>
     </section>
+
+    <div id="results" hidden>
+      <section id="verdict" class="panel verdict" aria-labelledby="verdict-heading"></section>
+      <section id="autopsy" class="panel" aria-labelledby="autopsy-heading"></section>
+      <section id="resurrection" class="panel" aria-labelledby="resurrection-heading"></section>
+      <section id="proof" class="panel" aria-labelledby="proof-heading"></section>
+      <p id="timings" class="timings"></p>
+    </div>
+
+    <noscript><p class="panel">Crypt Keeper needs JavaScript to raise the dead.</p></noscript>
   </main>
 
   <footer class="site-footer">
-    <p>Built with Kiro for Kiroween 2026 · Frankenstein category</p>
+    <p>Built with Kiro for Kiroween 2026. Proof of life runs the package's own code on this machine, so only revive packages you would be willing to import.</p>
   </footer>
-
-  <script src="app.js"></script>
 </body>
 </html>

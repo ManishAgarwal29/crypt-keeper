@@ -8,18 +8,22 @@ with CRYPT_KEEPER_ALLOWED_ORIGINS and CRYPT_KEEPER_ALLOWED_HOSTS (comma-separate
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from api.exhumer import ExhumeError, exhume
@@ -187,11 +191,83 @@ def proof_of_life(req: ProofRequest) -> ProofOfLife:
     return _run_proof(req.snapshot, req.target_python)
 
 
+
+
 class ReviveRequest(BaseModel):
     ref: PackageRef
     target_python: str = "3.12"
     run_proof_of_life: bool = True
     verify_original: bool = True  # also check the original, to show dead -> alive
+
+
+def _pipeline(req: ReviveRequest) -> Iterator[dict]:
+    """Run the whole pipeline, yielding a progress event as each stage starts and finishes.
+
+    Stage events look like {"event": "stage", "stage": "exhume", "status": "start" | "done",
+    "seconds": 1.2, "detail": "31 files"}. The final event is {"event": "result", "response":
+    ReviveResponse}. Errors propagate as exceptions.
+    """
+    timings: dict[str, float] = {}
+    target = req.target_python
+
+    def start(stage: str) -> dict:
+        return {"event": "stage", "stage": stage, "status": "start"}
+
+    def done(stage: str, since: float, detail: str, record: bool = True) -> dict:
+        seconds = round(time.perf_counter() - since, 2)
+        if record:
+            timings[stage] = seconds
+        return {"event": "stage", "stage": stage, "status": "done", "seconds": seconds, "detail": detail}
+
+    yield start("exhume")
+    t = time.perf_counter()
+    snapshot = _exhume(req.ref, target)
+    yield done("exhume", t, f"{len(snapshot.source_map)} files" + (", truncated" if snapshot.truncated else ""))
+
+    yield start("autopsy")
+    t = time.perf_counter()
+    report = run_autopsy(snapshot, target, date.today())
+    yield done("autopsy", t, f"{report.liveness.value}, {len(report.findings)} findings")
+
+    yield start("revive")
+    t = time.perf_counter()
+    revival = revive(snapshot, report)
+    yield done("revive", t, f"{len(revival.diffs)} files changed")
+
+    before = after = None
+    if req.run_proof_of_life:
+        revived = revived_snapshot(snapshot, revival)
+        t = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            jobs = {pool.submit(_run_proof, revived, target): "proof_after"}
+            if req.verify_original:
+                jobs[pool.submit(_run_proof, snapshot, target)] = "proof_before"
+            for stage in jobs.values():
+                yield start(stage)
+            for future in as_completed(jobs):
+                proof = future.result()
+                stage = jobs[future]
+                if stage == "proof_after":
+                    after = proof
+                else:
+                    before = proof
+                yield done(stage, t, "skipped" if proof.skipped else "alive" if proof.imported else "dead", record=False)
+        timings["proof_of_life"] = round(time.perf_counter() - t, 2)
+
+    verdict, reason = judge(before, after)
+    yield {
+        "event": "result",
+        "response": ReviveResponse(
+            package=PackageSummary.from_snapshot(snapshot),
+            autopsy=report,
+            revival=revival,
+            proof_before=before,
+            proof_after=after,
+            verdict=verdict,
+            verdict_reason=reason,
+            timings=timings,
+        ),
+    }
 
 
 @app.post("/revive", response_model=ReviveResponse, responses=_ERRORS)
@@ -201,38 +277,42 @@ def revive_package(req: ReviveRequest) -> ReviveResponse:
     The original and the revived package are checked in parallel, so the extra comparison does
     not double the wait. Failure modes are those of `/exhume`, plus 503 when busy.
     """
-    timings: dict[str, float] = {}
+    for event in _pipeline(req):
+        if event["event"] == "result":
+            return event["response"]
+    raise RuntimeError("The pipeline ended without a result.")
 
-    def timed(stage: str, fn, *args):
-        started = time.perf_counter()
+
+@app.post("/revive/stream")
+def revive_stream(req: ReviveRequest) -> StreamingResponse:
+    """Same as `/revive`, but streams newline-delimited JSON so a client can show real progress.
+
+    Each line is a stage event, then one `{"event": "result", "data": <ReviveResponse>}` line, or
+    `{"event": "error", "status": <http status>, "detail": <message>}`. Because the HTTP status is
+    sent before the work starts, failures arrive as an `error` line, not as a status code.
+    """
+    def lines() -> Iterator[str]:
         try:
-            return fn(*args)
-        finally:
-            timings[stage] = round(time.perf_counter() - started, 2)
+            for event in _pipeline(req):
+                if event["event"] == "result":
+                    event = {"event": "result", "data": event["response"].model_dump(mode="json")}
+                yield json.dumps(event) + "\n"
+        except ExhumeError as exc:
+            yield json.dumps({"event": "error", "status": exc.status, "detail": exc.message}) + "\n"
+        except Exception:
+            log.exception("Unhandled error in /revive/stream")
+            yield json.dumps({
+                "event": "error", "status": 500,
+                "detail": "The crypt collapsed unexpectedly. See the server log.",
+            }) + "\n"
 
-    snapshot = timed("exhume", _exhume, req.ref, req.target_python)
-    report = timed("autopsy", run_autopsy, snapshot, req.target_python, date.today())
-    revival = timed("revive", revive, snapshot, report)
-
-    before = after = None
-    if req.run_proof_of_life:
-        revived = revived_snapshot(snapshot, revival)
-        started = time.perf_counter()
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            after_job = pool.submit(_run_proof, revived, req.target_python)
-            before_job = pool.submit(_run_proof, snapshot, req.target_python) if req.verify_original else None
-            after = after_job.result()
-            before = before_job.result() if before_job else None
-        timings["proof_of_life"] = round(time.perf_counter() - started, 2)
-
-    verdict, reason = judge(before, after)
-    return ReviveResponse(
-        package=PackageSummary.from_snapshot(snapshot),
-        autopsy=report,
-        revival=revival,
-        proof_before=before,
-        proof_after=after,
-        verdict=verdict,
-        verdict_reason=reason,
-        timings=timings,
+    return StreamingResponse(
+        lines(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"}
     )
+
+
+# The UI is served by the API itself, so it is same-origin and needs no CORS. Registered last
+# so every API route above takes precedence.
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

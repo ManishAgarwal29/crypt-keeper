@@ -233,3 +233,93 @@ def test_preflight_from_an_allowed_origin_succeeds():
 def test_reads_do_not_grant_cors_to_foreign_origins():
     r = client.get("/health", headers={"Origin": "http://evil.example"})
     assert r.status_code == 200 and "access-control-allow-origin" not in r.headers
+
+
+# --- /revive/stream: real progress for the UI ------------------------------------------------------------------------------------
+
+import json  # noqa: E402
+
+
+def stream(body: dict) -> list[dict]:
+    r = client.post("/revive/stream", json=body)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
+    return [json.loads(line) for line in r.text.splitlines()]
+
+
+def test_stream_reports_each_stage_then_the_full_result(fakes):
+    events = stream(revive_body())
+    stages = [(e["stage"], e["status"]) for e in events if e["event"] == "stage"]
+    assert stages[:6] == [
+        ("exhume", "start"), ("exhume", "done"), ("autopsy", "start"), ("autopsy", "done"),
+        ("revive", "start"), ("revive", "done"),
+    ]
+    assert {s for s in stages[6:]} == {
+        ("proof_before", "start"), ("proof_after", "start"), ("proof_before", "done"), ("proof_after", "done"),
+    }
+    done = {e["stage"]: e for e in events if e["event"] == "stage" and e["status"] == "done"}
+    assert done["exhume"]["detail"] == "1 files" and "dead" in done["autopsy"]["detail"]
+    assert done["revive"]["detail"] == "1 files changed"
+    assert done["proof_before"]["detail"] == "dead" and done["proof_after"]["detail"] == "alive"
+    assert all(isinstance(e["seconds"], float) for e in done.values())
+    assert events[-1]["event"] == "result" and events[-1]["data"]["verdict"] == "resurrected"
+    assert [e["event"] for e in events].count("result") == 1
+
+
+def test_stream_starts_both_proofs_before_either_finishes(fakes):
+    events = [(e["stage"], e["status"]) for e in stream(revive_body()) if e["event"] == "stage"]
+    first_done = min(i for i, (s, st) in enumerate(events) if s.startswith("proof") and st == "done")
+    started = [i for i, (s, st) in enumerate(events) if s.startswith("proof") and st == "start"]
+    assert len(started) == 2 and max(started) < first_done
+
+
+def test_stream_without_proof_of_life_has_no_proof_stages(fakes):
+    events = stream(revive_body(run_proof_of_life=False))
+    assert not any(e.get("stage", "").startswith("proof") for e in events)
+    assert events[-1]["data"]["verdict"] == "unverified"
+
+
+def test_stream_reports_a_missing_package_as_an_error_event(monkeypatch):
+    monkeypatch.setattr(main, "_http_client", lambda: pypi_client({}))
+    events = stream(revive_body())
+    assert events[0] == {"event": "stage", "stage": "exhume", "status": "start"}
+    assert events[-1]["event"] == "error" and events[-1]["status"] == 404
+    assert "deadpkg" in events[-1]["detail"] and not any(e["event"] == "result" for e in events)
+
+
+def test_stream_unexpected_errors_are_generic(fakes, monkeypatch):
+    def explode(*_):
+        raise RuntimeError("secret internal path")
+    monkeypatch.setattr(main, "revive", explode)
+    events = stream(revive_body())
+    assert events[-1]["event"] == "error" and events[-1]["status"] == 500 and "secret" not in json.dumps(events)
+
+
+def test_stream_busy_sandbox_is_an_error_event(fakes, monkeypatch):
+    slots = threading.BoundedSemaphore(1)
+    slots.acquire()
+    monkeypatch.setattr(main, "_proof_slots", slots)
+    monkeypatch.setattr(main, "SLOT_WAIT_SECONDS", 0.05)
+    assert stream(revive_body())[-1] == {
+        "event": "error", "status": 503,
+        "detail": "The crypt is busy: too many proof-of-life runs are in progress. Try again shortly.",
+    }
+
+
+def test_stream_is_protected_like_the_other_post_endpoints(fakes):
+    assert client.post("/revive/stream", json=revive_body(), headers={"Origin": "http://evil.example"}).status_code == 403
+    assert client.post("/revive/stream", content="{}", headers={"Content-Type": "text/plain"}).status_code == 415
+
+
+# --- the UI is served by the API --------------------------------------------------------------------------------------------------
+
+
+def test_the_frontend_is_served_from_the_same_origin():
+    page = client.get("/")
+    assert page.status_code == 200 and "Crypt Keeper" in page.text and page.headers["content-type"].startswith("text/html")
+    assert client.get("/app.js").status_code == 200
+    assert client.get("/style.css").status_code == 200
+
+
+def test_api_routes_win_over_the_static_mount_and_unknown_paths_404():
+    assert client.get("/health").json()["status"] == "the crypt is open"
+    assert client.get("/no-such-file.txt").status_code == 404
