@@ -59,8 +59,11 @@ the result.
    report success or the exact import error.
 2. WHEN the original package ships tests THEN the system SHALL run them against the revived
    version and report pass/fail counts.
-3. IF no tests exist THEN the system SHALL generate at least a smoke test that imports the
-   top-level module and calls any public zero-argument function.
+3. IF no tests exist THEN the system SHALL generate a smoke check that imports every top-level
+   module and calls public zero-argument functions that look read-only (names such as `get_*`,
+   `is_*`, `version`). _Amended: the original wording said "any public zero-argument function".
+   Calling `clean()` or `main()` in untrusted code can do real damage, so the set is limited to
+   read-only-looking names._
 
 ### Requirement 5: Haunted web UI
 **User Story:** As a user, I want a polished, spooky interface, so that the experience is
@@ -85,3 +88,37 @@ and the app share one extensible access layer.
 2. The MCP server SHALL expose a tool to fetch a repository file tree by URL.
 3. WHEN a tool is called with invalid input THEN it SHALL return a structured error, not
    crash.
+
+### Requirement 7: Honest verdicts
+_Added during the build. Real runs showed that a run on the wrong Python, or on an incomplete
+source tree, can look like success or failure for the wrong reason._
+
+**User Story:** As a developer, I want the verdict to say what was actually proven, so that I do
+not trust a result that does not apply to my target Python.
+
+#### Acceptance Criteria
+1. WHEN the original and the revived package are both checked THEN the system SHALL return a
+   verdict of `resurrected`, `improved`, `already_alive`, `still_dead`, `regressed` or
+   `unverified`, with a one-line reason.
+2. IF the check ran on a Python other than the target THEN the system SHALL NOT report success
+   (`unverified`), because a package that imports on 3.11 can still fail on 3.12.
+3. IF the exhumed source was cut short by size or count limits THEN the snapshot SHALL be marked
+   truncated and the autopsy and the proof-of-life log SHALL say so.
+4. WHEN PyPI metadata lists no dependencies THEN the exhumer SHALL read them from the sdist's own
+   packaging files before concluding the package has none.
+
+### Requirement 8: Safe execution and API
+_Added during the build. Proof of life runs a package's own code._
+
+**User Story:** As a user, I want proof of life to run package code with the fewest risks the
+design can offer, and I want other websites unable to trigger it.
+
+#### Acceptance Criteria
+1. The sandbox SHALL install dependencies wheel-only, reject pip options and URLs in dependency
+   strings, validate every written path, scrub the environment, apply a timeout to every step and
+   kill the whole process tree on timeout.
+2. The documentation SHALL state that the sandbox is not a security boundary.
+3. The API SHALL refuse non-JSON POSTs, POSTs from foreign origins, unknown Host headers and
+   oversized bodies, and SHALL limit concurrent sandbox runs.
+4. The system SHALL report progress while running (stage start and finish with timings), so the
+   UI shows real progress instead of an indeterminate wait.

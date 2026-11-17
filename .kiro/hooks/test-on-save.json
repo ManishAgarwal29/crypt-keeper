@@ -2,13 +2,14 @@
   "version": "v1",
   "hooks": [
     {
-      "name": "Run tests on Python save",
+      "name": "Quick tests on Python save",
       "trigger": "PostFileSave",
-      "description": "Runs the backend pytest suite whenever a Python file under backend/ is saved.",
+      "description": "Fast feedback on every backend save: skips the slow virtualenv sandbox tests and uses a light Hypothesis profile. The full suite runs after each spec task.",
       "matcher": "backend[\\\\/].*\\.py$",
       "action": {
         "type": "command",
-        "command": "cd backend; python -m pytest -q"
+        "command": "cd backend; python -m pytest -q -x -p no:cacheprovider --ignore=tests/test_sandbox.py --hypothesis-profile=fast",
+        "timeout": 120
       }
     }
   ]

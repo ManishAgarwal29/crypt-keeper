@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Safety review for sandbox and API edits",
+      "trigger": "PostFileSave",
+      "description": "When code that runs untrusted packages or guards the API is saved, re-check the safety invariants.",
+      "matcher": "backend[\\\\/](api[\\\\/](sandbox|main)|proof[\\\\/].*)\\.py$",
+      "action": {
+        "type": "agent",
+        "prompt": "The file just saved runs untrusted package code or guards the API that triggers it. Before continuing, check the change against .kiro/steering/sandbox-safety.md: untrusted values must not reach code or a shell, dependencies must stay plain wheel-only requirements, paths must stay contained, the environment must stay scrubbed, every step needs a timeout that kills the process tree, CORS must not widen, and a run on the wrong Python must never read as success. If any invariant was weakened, say which one and restore it, and make sure a test covers it. If none changed, say so in one line."
+      }
+    }
+  ]
+}

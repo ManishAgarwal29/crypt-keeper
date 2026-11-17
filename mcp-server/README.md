@@ -1,20 +1,27 @@
 # Crypt Keeper MCP Server
 
-Exposes two exhumation tools to Kiro and the app:
-- `get_pypi_metadata(name)` — PyPI metadata for a package.
-- `get_repo_tree(url)` — a repository's file tree.
+Exposes two exhumation tools to Kiro. They reuse `backend/api/exhumer.py`, so Kiro and the app see
+the same data.
+
+- `get_pypi_metadata(name)`: last release date, declared Pythons, dependencies, yanked versions.
+- `get_repo_tree(url)`: a GitHub repository's Python files.
+
+Both return JSON. Bad input or an upstream failure comes back as `{"error": ..., "status": ...}`
+instead of an exception.
 
 ## Install
 
 ```powershell
-pip install mcp httpx
+pip install mcp httpx packaging pydantic
 ```
 
-## Register in Kiro
+Works with `mcp` 1.x (`FastMCP`) and 2.x (`MCPServer`). A test in `backend/tests/test_mcp_tools.py`
+starts the server over stdio and calls it, so an SDK change shows up in the test run.
 
-Add this to your MCP config (`.kiro/settings/mcp.json` at the workspace root, or the
-user-level `~/.kiro/settings/mcp.json`). You can edit it from Kiro's command palette:
-search **"MCP"** and open the config.
+## Register it in Kiro
+
+In Kiro, open the command palette, search for **MCP**, and open the workspace MCP config
+(`.kiro/settings/mcp.json`). Add:
 
 ```json
 {
@@ -30,8 +37,13 @@ search **"MCP"** and open the config.
 }
 ```
 
-## Run standalone
+Then ask Kiro, for example: "Use crypt-keeper to look up attrdict's last release and declared
+Python versions."
+
+## Run it by hand
 
 ```powershell
 python mcp-server/server.py
 ```
+
+It speaks MCP over stdio, so it waits for a client.

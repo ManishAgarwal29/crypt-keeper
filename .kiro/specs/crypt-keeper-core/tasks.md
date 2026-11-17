@@ -59,7 +59,7 @@
     before/after diff, proof-of-life result. Keep it accessible.
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 13. Demo polish and Kiro usage writeup
+- [x] 13. Demo polish and Kiro usage writeup
   - End-to-end pass on 2-3 real dead packages for the video.
   - Fill in `docs/KIRO_USAGE.md`.
   - _Requirements: all (integration)_

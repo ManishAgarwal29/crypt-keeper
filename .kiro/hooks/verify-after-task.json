@@ -2,12 +2,13 @@
   "version": "v1",
   "hooks": [
     {
-      "name": "Verify tests after task",
+      "name": "Full suite after each spec task",
       "trigger": "PostTaskExec",
-      "description": "Runs the full backend test suite after a spec task is marked completed, to keep every task green.",
+      "description": "After a spec task is marked complete, run the whole backend suite including the real-virtualenv sandbox tests.",
       "action": {
         "type": "command",
-        "command": "cd backend; python -m pytest -q"
+        "command": "cd backend; python -m pytest -q -p no:cacheprovider",
+        "timeout": 600
       }
     }
   ]

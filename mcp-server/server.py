@@ -23,10 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from api.exhumer import ExhumeError, exhume_github, fetch_pypi_metadata  # noqa: E402
 
-try:
-    from mcp.server.fastmcp import FastMCP
-except ImportError:  # keep the module importable before the mcp package is installed
-    FastMCP = None  # type: ignore[assignment]
+try:  # mcp 2.x renamed FastMCP to MCPServer; the decorator and run() API are the same
+    from mcp.server.mcpserver import MCPServer as Server
+except ImportError:
+    try:  # mcp 1.x
+        from mcp.server.fastmcp import FastMCP as Server
+    except ImportError:  # keep the module importable (and its tool functions testable) without mcp
+        Server = None  # type: ignore[assignment,misc]
 
 
 def _client() -> httpx.Client:
@@ -57,7 +60,7 @@ def repo_tree_json(url: str, target_python: str = "3.12") -> str:
 
 
 def _build_server() -> Any:
-    server = FastMCP("crypt-keeper")
+    server = Server("crypt-keeper")
 
     @server.tool()
     def get_pypi_metadata(name: str) -> str:
@@ -73,6 +76,6 @@ def _build_server() -> Any:
 
 
 if __name__ == "__main__":
-    if FastMCP is None:
-        raise SystemExit("Install the 'mcp' package: pip install mcp")
+    if Server is None:
+        raise SystemExit("No supported MCP SDK found (needs mcp 1.x or 2.x): pip install mcp")
     _build_server().run()

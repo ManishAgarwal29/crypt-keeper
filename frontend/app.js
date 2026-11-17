@@ -450,7 +450,7 @@ function proofCard(title, proof, missing) {
 function start(target) {
   const name = target.trim();
   if (!name) {
-    inputError.textContent = "Name a package to exhume, for example unittest2.";
+    inputError.textContent = "Name a package to exhume, for example attrdict.";
     inputError.hidden = false;
     targetInput.setAttribute("aria-invalid", "true");
     targetInput.focus();

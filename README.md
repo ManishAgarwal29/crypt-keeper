@@ -22,16 +22,25 @@ Built for **Kiroween 2026**, category **Frankenstein**.
 4. **Proof of life.** Imports the original and the revived package in throwaway virtualenvs and
    runs the package's own tests (or a generated smoke check). The verdict compares the two.
 
-A real run, `unittest2` on Python 3.11 (about 40 seconds):
+Real runs on Python 3.12.10 (checked on the target Python, not a stand-in):
 
-| | Original | Revived |
-|---|---|---|
-| Imports | no: `module 'collections' has no attribute 'MutableMapping'` | yes |
-| Shipped tests | 0 pass, 14 errors | 6 pass, 1 fail, 21 errors |
+| Package (last release) | Original | Revived | Time |
+|---|---|---|---|
+| `attrdict` (2019) | dead: `cannot import name 'Mapping' from 'collections'` | alive | 13 s |
+| `hyper` (2016) | dead: `cannot import name 'Iterable' from 'collections'`; 4 tests pass, 13 error | alive; 95 tests pass, 8 fail, 5 error | 29 s |
+| `unittest2` (2015) | dead: `no attribute 'MutableMapping'`; 14 test errors | alive; 6 tests pass | 30 s |
+| `flask-restplus` (2019) | dead: `cannot import name 'cached_property' from 'werkzeug'` | still dead | 27 s |
 
-Not every package comes back. Flask-Script and sqlalchemy-migrate depend on internals that were
-removed from Flask and SQLAlchemy, and the verdict says `still dead`. Python 2 code is reported,
-not converted.
+![The verdict for attrdict: It lives!](docs/screenshots/verdict.png)
+
+![Proof of life: the original is dead with the exact ImportError, the revived package is alive](docs/screenshots/proof.png)
+
+![The Necromancer's diffs for attrdict](docs/screenshots/revival.png)
+
+The first three are single-cause failures: a standard-library name that moved. The last one
+depends on a function removed from another library, which Crypt Keeper cannot fix, and the
+verdict says `still dead`. Packages that already worked (`Pyro4`, `pathlib2`) read
+`already alive`. Python 2 code is reported, not converted.
 
 ## Run it
 
