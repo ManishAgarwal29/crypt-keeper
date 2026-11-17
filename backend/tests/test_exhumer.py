@@ -281,3 +281,123 @@ def test_exhume_github_rejects_bad_urls(url):
     with pytest.raises(ExhumeError) as err:
         exhume_github(url, "3.12", pypi_client({}))
     assert err.value.status == 422
+
+
+# --- dependency metadata from the sdist (older PyPI releases have no requires_dist) ----------------------------
+
+from api.exhumer import (  # noqa: E402
+    dependencies_from_metadata, extract_archive, is_dependency_metadata, parse_egg_requires,
+)
+
+
+def test_parse_egg_requires_keeps_unconditional_and_marker_sections_and_skips_extras():
+    text = "six>=1.4\ntraceback2\n\n[:python_version<'3.3']\nargparse\n\n[test]\npytest\n\n[docs:python_version>'3']\nsphinx\n"
+    assert parse_egg_requires(text) == ["six>=1.4", "traceback2", "argparse; python_version<'3.3'"]
+
+
+def test_parse_egg_requires_ignores_comments_and_blank_lines():
+    assert parse_egg_requires("# header\n\nsix\n") == ["six"]
+
+
+@pytest.mark.parametrize("path,expected", [
+    ("pkg.egg-info/requires.txt", True), ("src/pkg.egg-info/requires.txt", True), ("requires.txt", False),
+    ("pkg.egg-info/PKG-INFO", True), ("PKG-INFO", True), ("pyproject.toml", True), ("setup.cfg", True),
+    ("sub/pyproject.toml", False), ("a/b/c/d.egg-info/requires.txt", False), ("pkg/requires.txt", False),
+])
+def test_is_dependency_metadata(path, expected):
+    assert is_dependency_metadata(path) is expected
+
+
+def test_dependencies_prefer_requires_txt_then_pkg_info_then_pyproject_then_setup_cfg():
+    files = {
+        "p.egg-info/requires.txt": "a\n",
+        "PKG-INFO": "Requires-Dist: b\n",
+        "pyproject.toml": '[project]\ndependencies = ["c"]\n',
+        "setup.cfg": "[options]\ninstall_requires =\n    d\n",
+    }
+    assert dependencies_from_metadata(files) == ["a"]
+    del files["p.egg-info/requires.txt"]
+    assert dependencies_from_metadata(files) == ["b"]
+    del files["PKG-INFO"]
+    assert dependencies_from_metadata(files) == ["c"]
+    del files["pyproject.toml"]
+    assert dependencies_from_metadata(files) == ["d"]
+    del files["setup.cfg"]
+    assert dependencies_from_metadata(files) == []
+
+
+def test_pkg_info_requires_dist_skips_extras():
+    files = {"PKG-INFO": "Name: x\nRequires-Dist: six\nRequires-Dist: pytest; extra == 'test'\n"}
+    assert dependencies_from_metadata(files) == ["six"]
+
+
+def test_malformed_metadata_never_raises():
+    files = {"pyproject.toml": "this is [[ not toml", "setup.cfg": "[options\nbroken", "PKG-INFO": "\x00\x01"}
+    assert dependencies_from_metadata(files) == []
+
+
+@given(st.dictionaries(st.sampled_from(["requires.txt", "p.egg-info/requires.txt", "PKG-INFO", "pyproject.toml", "setup.cfg"]), st.text(max_size=120), max_size=5))
+def test_dependencies_from_metadata_never_raises_on_arbitrary_text(files):
+    assert isinstance(dependencies_from_metadata(files), list)
+
+
+def test_extract_archive_returns_metadata_and_flags_truncation(monkeypatch):
+    tar = make_tar({
+        "p-1/p/__init__.py": b"x = 1", "p-1/p/a.py": b"y = 2", "p-1/p/b.py": b"z = 3",
+        "p-1/p.egg-info/requires.txt": b"six\n", "p-1/README.md": b"hi",
+    })
+    full = extract_archive(tar, "p-1.tar.gz")
+    assert not full.truncated and len(full.py_files) == 3
+    assert full.metadata == {"p.egg-info/requires.txt": "six\n"}
+    monkeypatch.setattr("api.exhumer.MAX_PY_FILES", 2)
+    assert extract_archive(tar, "p-1.tar.gz").truncated
+
+
+def test_extract_archive_flags_oversize_python_files_as_truncation(monkeypatch):
+    monkeypatch.setattr("api.exhumer.MAX_FILE_BYTES", 10)
+    archive = extract_archive(make_tar({"p-1/small.py": b"x = 1", "p-1/big.py": b"x = 1" * 50}), "p.tar.gz")
+    assert archive.truncated and list(archive.py_files) == ["small.py"]
+
+
+def test_undecodable_files_are_not_counted_as_truncation():
+    archive = extract_archive(make_tar({"p-1/a.py": b"x = 1", "p-1/bad.py": b"\xff\xfe"}), "p.tar.gz")
+    assert not archive.truncated and list(archive.py_files) == ["a.py"]
+
+
+def test_exhume_pypi_reads_dependencies_from_the_sdist_when_pypi_has_none():
+    sdist = make_tar({"d-1/d/__init__.py": b"1", "d-1/d.egg-info/requires.txt": b"oldlib>=1\n"})
+    routes = {
+        "https://pypi.org/pypi/deadpkg/json": httpx.Response(200, json=pypi_payload(requires_dist=None)),
+        SDIST_URL: httpx.Response(200, content=sdist),
+        "https://pypi.org/pypi/oldlib/json": httpx.Response(200, json=pypi_payload(name="oldlib")),
+    }
+    snap = exhume_pypi("deadpkg", "3.12", pypi_client(routes))
+    assert snap.dependencies == ["oldlib>=1"] and "oldlib" in snap.dependency_info and not snap.truncated
+
+
+def test_exhume_pypi_prefers_pypi_requires_dist_when_present():
+    sdist = make_tar({"d-1/d/__init__.py": b"1", "d-1/d.egg-info/requires.txt": b"fromsdist\n"})
+    routes = {
+        "https://pypi.org/pypi/deadpkg/json": httpx.Response(200, json=pypi_payload(requires_dist=["frompypi"])),
+        SDIST_URL: httpx.Response(200, content=sdist),
+    }
+    assert exhume_pypi("deadpkg", "3.12", pypi_client(routes)).dependencies == ["frompypi"]
+
+
+def test_exhume_pypi_marks_a_truncated_snapshot(monkeypatch):
+    monkeypatch.setattr("api.exhumer.MAX_PY_FILES", 1)
+    routes = {
+        "https://pypi.org/pypi/deadpkg/json": httpx.Response(200, json=pypi_payload()),
+        SDIST_URL: httpx.Response(200, content=make_tar({"d-1/a.py": b"1", "d-1/b.py": b"2"})),
+    }
+    assert exhume_pypi("deadpkg", "3.12", pypi_client(routes)).truncated
+
+
+def test_exhume_github_marks_a_truncated_snapshot(monkeypatch):
+    monkeypatch.setattr("api.exhumer.MAX_GITHUB_FILES", 1)
+    routes = github_routes()
+    routes["https://api.github.com/repos/o/r/git/trees/main?recursive=1"] = httpx.Response(200, json={"tree": [
+        {"type": "blob", "path": "a.py", "size": 1}, {"type": "blob", "path": "b.py", "size": 1},
+    ]})
+    routes["https://raw.githubusercontent.com/o/r/main/a.py"] = httpx.Response(200, text="1")
+    assert exhume_github("https://github.com/o/r", "3.12", pypi_client(routes)).truncated

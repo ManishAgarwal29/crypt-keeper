@@ -44,7 +44,7 @@
   - Implement exhumer orchestration consuming those tools; mock in tests.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 6.1, 6.2, 6.3_
 
-- [ ] 10. Proof of life runner
+- [x] 10. Proof of life runner
   - Import revived package in an isolated subprocess; run shipped tests or a generated
     smoke test; return `ProofOfLife`.
   - _Requirements: 4.1, 4.2, 4.3_

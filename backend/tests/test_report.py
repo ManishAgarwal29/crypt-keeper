@@ -155,3 +155,9 @@ def test_non_alive_package_always_explains_itself(snapshot):
     report = run_autopsy(snapshot, "3.12", NOW)
     if report.liveness != Liveness.alive:
         assert report.findings, "a dormant or dead package must list at least one cause"
+
+
+def test_truncated_source_is_reported_as_a_finding():
+    report = run_autopsy(snap(last_release_date="2025-12-01", declared_pythons=["3.12"], truncated=True), "3.12", NOW)
+    assert kinds(report) == ["truncated-source"]
+    assert "not analysed" in report.findings[0].message

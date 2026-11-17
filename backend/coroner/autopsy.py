@@ -201,6 +201,11 @@ def run_autopsy(
     liveness = classify_liveness(last_release, now, snapshot.declared_pythons, target_python)
 
     findings = _liveness_findings(liveness, last_release, now)
+    if snapshot.truncated:
+        findings.append(Finding(
+            kind="truncated-source", severity="medium",
+            message="The source exceeded the exhumer's size limits, so some files were not analysed.",
+        ))
     gap = _python_support_gap(snapshot.declared_pythons, target_python)
     if gap:
         findings.append(Finding(

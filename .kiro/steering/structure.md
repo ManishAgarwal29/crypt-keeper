@@ -4,11 +4,16 @@
 crypt-keeper/
 ├── backend/
 │   ├── api/
-│   │   └── main.py          # FastAPI app + routes
+│   │   ├── main.py          # FastAPI app + routes
+│   │   ├── exhumer.py       # PyPI/GitHub fetching (network)
+│   │   └── sandbox.py       # runs revived code in a throwaway venv (subprocess)
 │   ├── coroner/
 │   │   └── autopsy.py       # cause-of-death analysis (pure, testable)
 │   ├── necromancer/
-│   │   └── revive.py        # revival transforms (pure, testable)
+│   │   ├── revive.py        # revival assembly + dependency bumping (pure, testable)
+│   │   └── rewriter.py      # source-preserving API rewrites (pure, testable)
+│   ├── proof/
+│   │   └── discovery.py     # what to import/test/smoke-call (pure, testable)
 │   ├── models.py            # shared Pydantic models
 │   ├── requirements.txt
 │   └── tests/

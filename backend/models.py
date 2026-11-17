@@ -52,6 +52,10 @@ class PackageSnapshot(BaseModel):
     dependency_info: dict[str, DependencyInfo] = Field(
         default_factory=dict, description="dependency name -> PyPI facts"
     )
+    truncated: bool = Field(
+        default=False,
+        description="True when size or count limits left some .py files out, so analysis and proof of life are incomplete",
+    )
     source_map: dict[str, str] = Field(
         default_factory=dict, description="relative path -> file contents"
     )
@@ -98,3 +102,15 @@ class ProofOfLife(BaseModel):
     error: str | None = None
     tests_passed: int = 0
     tests_failed: int = 0
+    tests_errors: int = 0
+    test_source: Literal["shipped", "smoke", "none"] = "none"
+    import_results: dict[str, str | None] = Field(
+        default_factory=dict, description="module -> import error, or None if it imported"
+    )
+    python_used: str | None = Field(default=None, description="interpreter version the check ran on")
+    target_python_matched: bool = Field(
+        default=False,
+        description="False means the check ran on a different Python than the target, so it does not prove the target works",
+    )
+    output: str = Field(default="", description="tail of the sandbox logs")
+    duration_seconds: float = 0.0

@@ -6,10 +6,12 @@ can supply httpx.MockTransport. The MCP server reuses these functions.
 """
 from __future__ import annotations
 
+import configparser
 import io
 import os
 import re
 import tarfile
+import tomllib
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -26,7 +28,8 @@ PYPI_JSON_URL = "https://pypi.org/pypi/{name}/json"
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 
-MAX_PY_FILES = 200
+MAX_PY_FILES = 1500
+MAX_GITHUB_FILES = 200  # GitHub files cost one request each
 MAX_FILE_BYTES = 200_000
 MAX_ARCHIVE_BYTES = 20_000_000
 MAX_DEP_LOOKUPS = 25
@@ -125,32 +128,148 @@ def parse_requirements_txt(text: str) -> list[str]:
     return deps
 
 
+@dataclass
+class Archive:
+    py_files: dict[str, str]
+    metadata: dict[str, str]  # packaging files that can name the dependencies
+    truncated: bool  # some .py files were left out (file count or size limits)
+
+
 def extract_py_files(content: bytes, filename: str) -> dict[str, str]:
-    """Pull .py files out of an sdist/zip archive held in memory.
+    """The .py files of an sdist/zip archive. See `extract_archive` for limits and metadata."""
+    return extract_archive(content, filename).py_files
+
+
+def extract_archive(content: bytes, filename: str) -> Archive:
+    """Pull .py files and dependency metadata out of an sdist/zip archive held in memory.
 
     Nothing is written to disk. Entries with absolute or `..` paths are skipped, the
-    top-level directory is stripped, and file count/size are capped.
+    top-level directory is stripped, and file count/size are capped. `truncated` is True when
+    the caps dropped any .py file, so callers know the result is incomplete.
     """
-    candidates: list[tuple[str, Callable[[], bytes]]] = []
+    py: list[tuple[str, Callable[[], bytes]]] = []
+    meta: list[tuple[str, Callable[[], bytes]]] = []
+    oversize = 0
+
+    def classify(path: str | None, size: int, read: Callable[[], bytes]) -> None:
+        nonlocal oversize
+        if not path:
+            return
+        if path.endswith(".py"):
+            if size <= MAX_FILE_BYTES:
+                py.append((path, read))
+            else:
+                oversize += 1
+        elif is_dependency_metadata(path) and size <= MAX_FILE_BYTES:
+            meta.append((path, read))
+
     try:
         if filename.endswith((".zip", ".whl")):
             with zipfile.ZipFile(io.BytesIO(content)) as zf:
                 for zi in zf.infolist():
-                    path = _clean_member_path(zi.filename)
-                    if path and path.endswith(".py") and not zi.is_dir() and zi.file_size <= MAX_FILE_BYTES:
-                        candidates.append((path, lambda zi=zi: zf.read(zi)))
-                return _read_best(candidates)
+                    if not zi.is_dir():
+                        classify(_clean_member_path(zi.filename), zi.file_size, lambda zi=zi: zf.read(zi))
+                return _build_archive(py, meta, oversize)
         with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as tf:
             for m in tf.getmembers():
-                path = _clean_member_path(m.name)
-                if path and path.endswith(".py") and m.isfile() and m.size <= MAX_FILE_BYTES:
-                    candidates.append((path, lambda m=m: (tf.extractfile(m) or io.BytesIO()).read()))
-            return _read_best(candidates)
+                if m.isfile():
+                    classify(_clean_member_path(m.name), m.size, lambda m=m: (tf.extractfile(m) or io.BytesIO()).read())
+            return _build_archive(py, meta, oversize)
     except (tarfile.TarError, zipfile.BadZipFile, EOFError, OSError) as exc:
         raise ExhumeError(
             f"The coffin is rotten: the source archive could not be opened ({exc.__class__.__name__}).",
             422,
         ) from exc
+
+
+def _build_archive(
+    py: list[tuple[str, Callable[[], bytes]]],
+    meta: list[tuple[str, Callable[[], bytes]]],
+    oversize: int,
+) -> Archive:
+    found, capped = _read_best(py)
+    metadata: dict[str, str] = {}
+    for path, read in meta:
+        try:
+            metadata[path] = read().decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+    return Archive(py_files=found, metadata=metadata, truncated=capped or oversize > 0)
+
+
+def is_dependency_metadata(path: str) -> bool:
+    """Packaging files that can name a package's dependencies, near the top of the archive."""
+    parts = path.split("/")
+    if len(parts) > 3:
+        return False
+    name = parts[-1]
+    parent = parts[-2] if len(parts) > 1 else ""
+    if name == "requires.txt":
+        return parent.endswith(".egg-info")
+    if name == "PKG-INFO":
+        return len(parts) == 1 or parent.endswith(".egg-info")
+    return name in ("pyproject.toml", "setup.cfg") and len(parts) == 1
+
+
+def parse_egg_requires(text: str) -> list[str]:
+    """Dependencies from a setuptools `requires.txt`: the unconditional ones, plus marker sections.
+
+    `[:python_version<"3"]` sections become `dep; marker`. Extras sections (`[test]`) are
+    optional dependencies and are skipped.
+    """
+    deps: list[str] = []
+    section: str | None = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+        elif section is None:
+            deps.append(line)
+        elif section.startswith(":"):
+            deps.append(f"{line}; {section[1:]}")
+    return deps
+
+
+def dependencies_from_metadata(files: dict[str, str]) -> list[str]:
+    """Best-effort dependency list from packaging files, for packages whose PyPI metadata has none.
+
+    Tries setuptools `requires.txt`, then `PKG-INFO` `Requires-Dist`, then `pyproject.toml`,
+    then `setup.cfg`. Returns the first non-empty answer. Never raises on malformed files.
+    """
+    def named(suffix: str) -> list[str]:
+        return [files[p] for p in sorted(files) if p == suffix or p.endswith("/" + suffix)]
+
+    for text in named("requires.txt"):
+        deps = parse_egg_requires(text)
+        if deps:
+            return deps
+    for text in named("PKG-INFO"):
+        deps = [
+            line.split(":", 1)[1].strip() for line in text.splitlines()
+            if line.lower().startswith("requires-dist:") and not _is_extra_dependency(line.split(":", 1)[1].strip())
+        ]
+        if deps:
+            return deps
+    for text in named("pyproject.toml"):
+        try:
+            deps = [d for d in (tomllib.loads(text).get("project", {}).get("dependencies") or []) if isinstance(d, str)]
+        except (tomllib.TOMLDecodeError, AttributeError):
+            continue
+        if deps:
+            return deps
+    for text in named("setup.cfg"):
+        parser = configparser.ConfigParser(interpolation=None)
+        try:
+            parser.read_string(text)
+            raw = parser.get("options", "install_requires", fallback="")
+        except configparser.Error:
+            continue
+        deps = [line.strip() for line in raw.splitlines() if line.strip() and not line.strip().startswith("#")]
+        if deps:
+            return deps
+    return []
 
 
 _LOW_PRIORITY_DIRS = {"test", "tests", "testing", "doc", "docs", "example", "examples", "benchmarks", "scripts"}
@@ -169,19 +288,24 @@ def file_priority(path: str) -> tuple[int, str]:
     return (1 if low else 0, path)
 
 
-def _read_best(candidates: list[tuple[str, Callable[[], bytes]]]) -> dict[str, str]:
-    """Read the highest-priority candidates until MAX_PY_FILES decodable files are held."""
+def _read_best(candidates: list[tuple[str, Callable[[], bytes]]]) -> tuple[dict[str, str], bool]:
+    """Read the highest-priority candidates until MAX_PY_FILES decodable files are held.
+
+    Returns (files, capped); `capped` is True when more candidates were left unread.
+    """
     found: dict[str, str] = {}
+    capped = False
     for path, read in sorted(candidates, key=lambda c: file_priority(c[0])):
-        if len(found) >= MAX_PY_FILES:
-            break
         if path in found:
             continue
+        if len(found) >= MAX_PY_FILES:
+            capped = True
+            break
         try:
             found[path] = read().decode("utf-8")
         except UnicodeDecodeError:
             continue
-    return dict(sorted(found.items()))
+    return dict(sorted(found.items())), capped
 
 
 def _clean_member_path(name: str) -> str | None:
@@ -286,16 +410,22 @@ def fetch_dependency_info(
 def exhume_pypi(name: str, target_python: str, client: httpx.Client) -> PackageSnapshot:
     meta = fetch_pypi_metadata(name, client)
     source_map: dict[str, str] = {}
+    truncated = False
+    dependencies = meta.dependencies
     if meta.sdist_url:
-        archive = _download(client, meta.sdist_url)
-        source_map = extract_py_files(archive, meta.sdist_url.rsplit("/", 1)[-1])
+        archive = extract_archive(_download(client, meta.sdist_url), meta.sdist_url.rsplit("/", 1)[-1])
+        source_map, truncated = archive.py_files, archive.truncated
+        # Older releases often have no `requires_dist` on PyPI; the sdist's own metadata does.
+        if not dependencies:
+            dependencies = dependencies_from_metadata(archive.metadata)
     return PackageSnapshot(
         ref=PackageRef(source=Source.pypi, identifier=name),
         last_release_date=meta.last_release_date,
         declared_pythons=meta.declared_pythons,
-        dependencies=meta.dependencies,
-        dependency_info=fetch_dependency_info(meta.dependencies, target_python, client),
+        dependencies=dependencies,
+        dependency_info=fetch_dependency_info(dependencies, target_python, client),
         source_map=source_map,
+        truncated=truncated,
     )
 
 
@@ -326,17 +456,19 @@ def exhume_github(
     entries = _json(tree_resp, "GitHub").get("tree") or []
 
     blobs = [e for e in entries if e.get("type") == "blob" and e.get("path")]
+    all_py = [e for e in blobs if e["path"].endswith(".py")]
     py_paths = sorted(
-        (e["path"] for e in blobs
-         if e["path"].endswith(".py") and (e.get("size") or 0) <= MAX_FILE_BYTES),
+        (e["path"] for e in all_py if (e.get("size") or 0) <= MAX_FILE_BYTES),
         key=file_priority,
-    )[:MAX_PY_FILES]
+    )[:MAX_GITHUB_FILES]
+    truncated = len(py_paths) < len(all_py)
 
     def raw(path: str) -> str | None:
         resp = _get(client, f"{GITHUB_RAW}/{owner}/{repo}/{quote(branch, safe='')}/{quote(path)}", "GitHub raw")
         return resp.text if resp.status_code == 200 else None
 
     source_map = {p: t for p in py_paths if (t := raw(p)) is not None}
+    truncated = len(source_map) < len(all_py)
 
     deps: list[str] = []
     if any(e["path"] == "requirements.txt" for e in blobs):
@@ -349,6 +481,7 @@ def exhume_github(
         dependencies=deps,
         dependency_info=fetch_dependency_info(deps, target_python, client),
         source_map=source_map,
+        truncated=truncated,
     )
 
 
