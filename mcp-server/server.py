@@ -1,21 +1,59 @@
 """Crypt Keeper MCP server: exhumation tools for PyPI and GitHub.
 
-Exposes two tools so Kiro (and the app) share one access layer:
+Exposes two tools so Kiro and the app share one access layer:
   - get_pypi_metadata(name)
   - get_repo_tree(url)
 
-This is a skeleton using the `mcp` package stdio server. Task 9 implements the real
-fetching. Register it in .kiro/settings/mcp.json to use inside Kiro.
+The fetching logic lives in backend/api/exhumer.py and is reused here. Both tools return
+JSON strings; bad input or upstream failures come back as {"error": ..., "status": ...}
+instead of raising. Register the server in .kiro/settings/mcp.json (see README).
 """
 from __future__ import annotations
 
 import json
+import os
+import sys
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any
+
+import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+
+from api.exhumer import ExhumeError, exhume_github, fetch_pypi_metadata  # noqa: E402
 
 try:
     from mcp.server.fastmcp import FastMCP
-except ImportError:  # keep the skeleton importable before deps are installed
+except ImportError:  # keep the module importable before the mcp package is installed
     FastMCP = None  # type: ignore[assignment]
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(timeout=20, follow_redirects=True)
+
+
+def _error(exc: ExhumeError) -> str:
+    return json.dumps({"error": exc.message, "status": exc.status})
+
+
+def pypi_metadata_json(name: str) -> str:
+    """Trimmed PyPI metadata for `name` as JSON, or a structured error."""
+    try:
+        with _client() as client:
+            return json.dumps(asdict(fetch_pypi_metadata(name, client)))
+    except ExhumeError as exc:
+        return _error(exc)
+
+
+def repo_tree_json(url: str, target_python: str = "3.12") -> str:
+    """A GitHub repo's Python files as {"files": {path: content}}, or a structured error."""
+    try:
+        with _client() as client:
+            snapshot = exhume_github(url, target_python, client, os.environ.get("GITHUB_TOKEN"))
+        return json.dumps({"url": snapshot.ref.identifier, "files": snapshot.source_map})
+    except ExhumeError as exc:
+        return _error(exc)
 
 
 def _build_server() -> Any:
@@ -23,15 +61,13 @@ def _build_server() -> Any:
 
     @server.tool()
     def get_pypi_metadata(name: str) -> str:
-        """Fetch PyPI metadata for a package by name. Returns JSON (task 9)."""
-        # TODO(task 9): GET https://pypi.org/pypi/{name}/json and return trimmed metadata.
-        return json.dumps({"name": name, "status": "not-implemented"})
+        """Fetch PyPI metadata for a package by name. Returns JSON."""
+        return pypi_metadata_json(name)
 
     @server.tool()
     def get_repo_tree(url: str) -> str:
-        """Fetch a repository's file tree by URL. Returns JSON map (task 9)."""
-        # TODO(task 9): fetch repo contents; return {path: content}.
-        return json.dumps({"url": url, "files": {}, "status": "not-implemented"})
+        """Fetch the Python files of a GitHub repository by URL. Returns JSON."""
+        return repo_tree_json(url)
 
     return server
 

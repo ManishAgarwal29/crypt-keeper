@@ -39,7 +39,7 @@
   - Implement `revive` producing `RevivalResult` with per-file diffs.
   - _Requirements: 3.4_
 
-- [ ] 9. Exhumer + MCP server
+- [x] 9. Exhumer + MCP server
   - Implement MCP tools `get_pypi_metadata` and `get_repo_tree`.
   - Implement exhumer orchestration consuming those tools; mock in tests.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 6.1, 6.2, 6.3_
