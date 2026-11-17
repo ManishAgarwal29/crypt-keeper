@@ -174,8 +174,8 @@ def scan_source(path: str, source: str, target_python: str) -> list[Finding]:
             message="Could not be parsed as Python source.", location=path,
         )]
 
-    guarded = _guarded_node_ids(tree)
-    aliases = _import_aliases(tree)
+    guarded = guarded_node_ids(tree)
+    aliases = import_aliases(tree)
     uses_unittest = any(v == "unittest" or v.startswith("unittest.") for v in aliases.values())
 
     findings: list[Finding] = []
@@ -217,7 +217,7 @@ def scan_source(path: str, source: str, target_python: str) -> list[Finding]:
                     emit(node, dotted, REMOVED_ATTRS[dotted])
 
         elif isinstance(node, ast.Attribute):
-            dotted = _resolve_attribute(node, aliases)
+            dotted = resolve_attribute(node, aliases)
             if dotted in REMOVED_ATTRS:
                 emit(node, dotted, REMOVED_ATTRS[dotted])
             elif (
@@ -240,7 +240,7 @@ def _module_removal(dotted: str) -> tuple[str, Removal] | None:
     return None
 
 
-def _import_aliases(tree: ast.AST) -> dict[str, str]:
+def import_aliases(tree: ast.AST) -> dict[str, str]:
     """Map each locally bound import name to the dotted path it refers to."""
     aliases: dict[str, str] = {}
     for node in ast.walk(tree):
@@ -258,7 +258,7 @@ def _import_aliases(tree: ast.AST) -> dict[str, str]:
     return aliases
 
 
-def _resolve_attribute(node: ast.Attribute, aliases: dict[str, str]) -> str | None:
+def resolve_attribute(node: ast.Attribute, aliases: dict[str, str]) -> str | None:
     parts = [node.attr]
     cur = node.value
     while isinstance(cur, ast.Attribute):
@@ -272,7 +272,7 @@ def _resolve_attribute(node: ast.Attribute, aliases: dict[str, str]) -> str | No
     return ".".join([root, *reversed(parts)])
 
 
-def _guarded_node_ids(tree: ast.AST) -> set[int]:
+def guarded_node_ids(tree: ast.AST) -> set[int]:
     """Ids of every node inside a try block (body and handlers) that catches import errors.
 
     Compatibility code such as `try: import urllib2 except ImportError: import urllib.request`

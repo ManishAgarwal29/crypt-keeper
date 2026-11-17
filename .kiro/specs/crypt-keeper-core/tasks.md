@@ -30,7 +30,7 @@
   - Property tests: no pin below floor; idempotent.
   - _Requirements: 3.1, 3.3_
 
-- [ ] 7. Necromancer: deprecated API rewriting
+- [x] 7. Necromancer: deprecated API rewriting
   - Implement `rewrite_deprecated` with a mapping table. Record manual items.
   - Property tests: idempotent; never drops a module path.
   - _Requirements: 3.2, 3.3_

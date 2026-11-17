@@ -30,7 +30,7 @@ def test_bump_preserves_count(deps):
 
 @given(st.text(max_size=200))
 def test_rewrite_is_idempotent(source):
-    once, _ = rewrite_deprecated(source)
-    twice, _ = rewrite_deprecated(once)
+    once, _, _ = rewrite_deprecated(source)
+    twice, _, _ = rewrite_deprecated(once)
     # Property: applying the rewrite twice equals applying it once.
     assert once == twice

@@ -12,12 +12,9 @@ from packaging.version import Version
 
 from models import AutopsyReport, FileDiff, PackageSnapshot, RevivalResult
 from necromancer.floors import floor_for
+from necromancer.rewriter import rewrite_deprecated
 
-# Rewrite mappings expanded in task 7. old substring -> new substring.
-API_REWRITES: dict[str, str] = {
-    "collections.Mapping": "collections.abc.Mapping",
-    "collections.Sequence": "collections.abc.Sequence",
-}
+
 
 def bump_dependencies(
     deps: list[str], target_python: str
@@ -121,17 +118,6 @@ def _cap_prefix(spec: Specifier) -> Version:
     return Version(".".join(str(n) for n in release[:-1]))
 
 
-def rewrite_deprecated(source: str) -> tuple[str, list[str]]:
-    """Rewrite known deprecated APIs. Idempotent by construction."""
-    applied: list[str] = []
-    out = source
-    for old, new in API_REWRITES.items():
-        if old in out:
-            out = out.replace(old, new)
-            applied.append(f"{old} -> {new}")
-    return out, applied
-
-
 def revive(snapshot: PackageSnapshot, report: AutopsyReport) -> RevivalResult:
     """Apply all revival transforms, producing diffs and an applied/manual log."""
     diffs: list[FileDiff] = []
@@ -145,9 +131,10 @@ def revive(snapshot: PackageSnapshot, report: AutopsyReport) -> RevivalResult:
     manual += dep_manual
 
     for path, content in snapshot.source_map.items():
-        new_content, file_applied = rewrite_deprecated(content)
+        new_content, file_applied, file_manual = rewrite_deprecated(content, report.target_python, path)
         if new_content != content:
             diffs.append(FileDiff(path=path, before=content, after=new_content))
-            applied += [f"{path}: {a}" for a in file_applied]
+        applied += file_applied
+        manual += file_manual
 
     return RevivalResult(diffs=diffs, applied=applied, manual_items=manual)
