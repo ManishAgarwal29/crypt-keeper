@@ -16,12 +16,12 @@
   - Unit tests with fixture dependency sets.
   - _Requirements: 2.2_
 
-- [ ] 4. Coroner: deprecated API detection
+- [x] 4. Coroner: deprecated API detection
   - Implement `detect_deprecated_apis` using a known-deprecations table.
   - Unit tests covering at least 3 real removed/deprecated stdlib APIs.
   - _Requirements: 2.3_
 
-- [ ] 5. Coroner: assemble autopsy report
+- [x] 5. Coroner: assemble autopsy report
   - Implement `run_autopsy` composing the above into an `AutopsyReport`.
   - _Requirements: 2.4_
 

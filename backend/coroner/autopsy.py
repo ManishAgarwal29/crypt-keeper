@@ -5,36 +5,38 @@ property-tested. See .kiro/specs/crypt-keeper-core/design.md.
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 
+from coroner.deprecations import scan_source
 from models import AutopsyReport, DependencyInfo, Finding, Liveness, PackageSnapshot
-
-# Minimal starter table of stdlib APIs removed/deprecated in modern Python.
-# Task 4 will expand this. Format: substring -> (severity, message).
-DEPRECATED_API_TABLE: dict[str, tuple[str, str]] = {
-    "imp.load_source": ("high", "`imp` was removed in 3.12; use importlib."),
-    "asyncio.coroutine": ("high", "`@asyncio.coroutine` removed in 3.11; use async def."),
-    "collections.Mapping": (
-        "medium",
-        "ABCs moved to collections.abc in 3.10.",
-    ),
-}
 
 DORMANT_AFTER_DAYS = 365
 DEAD_AFTER_DAYS = 365 * 3
 
 
+PYTHON_LAG_MINORS = 3  # newest declared Python this many minors behind the target counts as lagging
+_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
+_PY_VERSION_RE = re.compile(r"^(\d+)\.(\d+)")
+
+
 def classify_liveness(
-    last_release: date | None, now: date, declared_pythons: list[str]
+    last_release: date | None,
+    now: date,
+    declared_pythons: list[str],
+    target_python: str | None = None,
 ) -> Liveness:
     """Classify a package as alive, dormant, or dead.
 
-    Dead if no release date is known, or the last release is older than
-    DEAD_AFTER_DAYS. Dormant between DORMANT_AFTER_DAYS and DEAD_AFTER_DAYS.
+    By release age: dead if no release date is known or the last release is older than
+    DEAD_AFTER_DAYS; dormant from DORMANT_AFTER_DAYS. By Python support: when a
+    `target_python` is given and the newest declared Python lags it by PYTHON_LAG_MINORS
+    or more (or the package declares only Python 2), an otherwise alive package is
+    dormant. Support never makes a package deader than its age does.
     """
     if last_release is None:
         return Liveness.dead
@@ -43,7 +45,34 @@ def classify_liveness(
         return Liveness.dead
     if age_days >= DORMANT_AFTER_DAYS:
         return Liveness.dormant
+    if target_python is not None and _python_support_gap(declared_pythons, target_python):
+        return Liveness.dormant
     return Liveness.alive
+
+
+def _newest_python(declared: list[str]) -> tuple[int, int] | None:
+    versions = [(int(m.group(1)), int(m.group(2))) for d in declared if (m := _PY_VERSION_RE.match(d))]
+    return max(versions) if versions else None
+
+
+def _python_support_gap(declared: list[str], target_python: str) -> str | None:
+    """Describe how the declared Python support falls short of the target, or None if it doesn't.
+
+    Unknown or unparseable data yields None: we only report a gap we can see.
+    """
+    newest = _newest_python(declared)
+    m = _PY_VERSION_RE.match(target_python.strip())
+    if newest is None or m is None:
+        return None
+    target = (int(m.group(1)), int(m.group(2)))
+    if newest >= target:
+        return None
+    if newest[0] < target[0]:
+        return f"declares Python up to {newest[0]}.{newest[1]} only, but the target is {target[0]}.{target[1]}"
+    lag = target[1] - newest[1]
+    if lag >= PYTHON_LAG_MINORS:
+        return f"newest declared Python is {newest[0]}.{newest[1]}, {lag} versions behind the target {target[0]}.{target[1]}"
+    return None
 
 
 def analyze_dependencies(
@@ -152,33 +181,55 @@ def _same_version(a: str, b: str) -> bool:
 
 
 def detect_deprecated_apis(source_map: dict[str, str], target_python: str) -> list[Finding]:
-    """Scan source for known deprecated/removed stdlib APIs."""
+    """Scan every file for APIs removed at or before the target Python version."""
     findings: list[Finding] = []
-    for path, content in source_map.items():
-        for needle, (severity, message) in DEPRECATED_API_TABLE.items():
-            if needle in content:
-                findings.append(
-                    Finding(
-                        kind="deprecated-api",
-                        severity=severity,  # type: ignore[arg-type]
-                        message=message,
-                        location=path,
-                    )
-                )
+    for path in sorted(source_map):
+        findings += scan_source(path, source_map[path], target_python)
     return findings
 
 
 def run_autopsy(
     snapshot: PackageSnapshot, target_python: str, now: date
 ) -> AutopsyReport:
-    """Compose the full autopsy report from the sub-analyses."""
+    """Compose the full autopsy report from the sub-analyses.
+
+    The report lists every cause of death as a finding, including the package's own
+    abandonment and Python support gap, ordered most severe first. Ordering is
+    deterministic: severity, then kind, then location.
+    """
     last_release = _parse_date(snapshot.last_release_date)
-    liveness = classify_liveness(last_release, now, snapshot.declared_pythons)
-    findings = analyze_dependencies(snapshot.dependencies, now, snapshot.dependency_info)
+    liveness = classify_liveness(last_release, now, snapshot.declared_pythons, target_python)
+
+    findings = _liveness_findings(liveness, last_release, now)
+    gap = _python_support_gap(snapshot.declared_pythons, target_python)
+    if gap:
+        findings.append(Finding(
+            kind="python-support-gap", severity="medium", message=f"This package {gap}.",
+        ))
+    findings += analyze_dependencies(snapshot.dependencies, now, snapshot.dependency_info)
     findings += detect_deprecated_apis(snapshot.source_map, target_python)
-    return AutopsyReport(
-        liveness=liveness, target_python=target_python, findings=findings
-    )
+
+    findings.sort(key=lambda f: (_SEVERITY_RANK[f.severity], f.kind, f.location or ""))
+    return AutopsyReport(liveness=liveness, target_python=target_python, findings=findings)
+
+
+def _liveness_findings(liveness: Liveness, last_release: date | None, now: date) -> list[Finding]:
+    if liveness == Liveness.alive:
+        return []
+    if last_release is None:
+        return [Finding(
+            kind="abandoned-package", severity="high",
+            message="No release date is known, so the package is presumed dead.",
+        )]
+    years = (now - last_release).days / 365
+    severity = "high" if liveness == Liveness.dead else "medium"
+    # A dormant package can be dormant by Python support alone; only blame age if it is old.
+    if (now - last_release).days < DORMANT_AFTER_DAYS:
+        return []
+    return [Finding(
+        kind="abandoned-package", severity=severity,
+        message=f"Last released {last_release.isoformat()} ({years:.1f} years ago); the package is {liveness.value}.",
+    )]
 
 
 def _parse_date(value: str | None) -> date | None:

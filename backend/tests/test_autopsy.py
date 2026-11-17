@@ -42,7 +42,7 @@ def test_run_autopsy_composes_report():
         last_release_date="2019-01-01",
         declared_pythons=["3.6"],
         dependencies=["requests==2.0.0"],
-        source_map={"m.py": "collections.Mapping"},
+        source_map={"m.py": "import collections\nx = collections.Mapping"},
     )
     report = run_autopsy(snapshot, "3.12", date(2026, 1, 1))
     assert report.liveness == Liveness.dead

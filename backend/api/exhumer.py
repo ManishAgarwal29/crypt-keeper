@@ -11,6 +11,7 @@ import os
 import re
 import tarfile
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from urllib.parse import quote
 
@@ -130,41 +131,57 @@ def extract_py_files(content: bytes, filename: str) -> dict[str, str]:
     Nothing is written to disk. Entries with absolute or `..` paths are skipped, the
     top-level directory is stripped, and file count/size are capped.
     """
-    found: dict[str, str] = {}
+    candidates: list[tuple[str, Callable[[], bytes]]] = []
     try:
         if filename.endswith((".zip", ".whl")):
             with zipfile.ZipFile(io.BytesIO(content)) as zf:
                 for zi in zf.infolist():
-                    if zi.is_dir() or zi.file_size > MAX_FILE_BYTES:
-                        continue
                     path = _clean_member_path(zi.filename)
-                    if path is None:
-                        continue
-                    _keep_text(found, path, lambda zi=zi: zf.read(zi))
-        else:
-            with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as tf:
-                for m in tf.getmembers():
-                    if not m.isfile() or m.size > MAX_FILE_BYTES:
-                        continue
-                    path = _clean_member_path(m.name)
-                    if path is None:
-                        continue
-                    _keep_text(found, path, lambda m=m: (tf.extractfile(m) or io.BytesIO()).read())
+                    if path and path.endswith(".py") and not zi.is_dir() and zi.file_size <= MAX_FILE_BYTES:
+                        candidates.append((path, lambda zi=zi: zf.read(zi)))
+                return _read_best(candidates)
+        with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as tf:
+            for m in tf.getmembers():
+                path = _clean_member_path(m.name)
+                if path and path.endswith(".py") and m.isfile() and m.size <= MAX_FILE_BYTES:
+                    candidates.append((path, lambda m=m: (tf.extractfile(m) or io.BytesIO()).read()))
+            return _read_best(candidates)
     except (tarfile.TarError, zipfile.BadZipFile, EOFError, OSError) as exc:
         raise ExhumeError(
             f"The coffin is rotten: the source archive could not be opened ({exc.__class__.__name__}).",
             422,
         ) from exc
-    return dict(sorted(found.items())[:MAX_PY_FILES])
 
 
-def _keep_text(found: dict[str, str], path: str, read) -> None:
-    if not path.endswith(".py") or len(found) >= MAX_PY_FILES * 4:
-        return
-    try:
-        found[path] = read().decode("utf-8")
-    except UnicodeDecodeError:
-        return
+_LOW_PRIORITY_DIRS = {"test", "tests", "testing", "doc", "docs", "example", "examples", "benchmarks", "scripts"}
+
+
+def file_priority(path: str) -> tuple[int, str]:
+    """Sort key: package code first, then tests/docs/examples. Ties break alphabetically."""
+    parts = path.lower().split("/")
+    name = parts[-1]
+    low = (
+        any(p in _LOW_PRIORITY_DIRS or p.endswith(("_tests", "_test")) for p in parts[:-1])
+        or name.startswith("test_")
+        or name.endswith("_test.py")
+        or name == "conftest.py"
+    )
+    return (1 if low else 0, path)
+
+
+def _read_best(candidates: list[tuple[str, Callable[[], bytes]]]) -> dict[str, str]:
+    """Read the highest-priority candidates until MAX_PY_FILES decodable files are held."""
+    found: dict[str, str] = {}
+    for path, read in sorted(candidates, key=lambda c: file_priority(c[0])):
+        if len(found) >= MAX_PY_FILES:
+            break
+        if path in found:
+            continue
+        try:
+            found[path] = read().decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+    return dict(sorted(found.items()))
 
 
 def _clean_member_path(name: str) -> str | None:
@@ -310,8 +327,9 @@ def exhume_github(
 
     blobs = [e for e in entries if e.get("type") == "blob" and e.get("path")]
     py_paths = sorted(
-        e["path"] for e in blobs
-        if e["path"].endswith(".py") and (e.get("size") or 0) <= MAX_FILE_BYTES
+        (e["path"] for e in blobs
+         if e["path"].endswith(".py") and (e.get("size") or 0) <= MAX_FILE_BYTES),
+        key=file_priority,
     )[:MAX_PY_FILES]
 
     def raw(path: str) -> str | None:

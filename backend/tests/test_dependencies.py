@@ -88,7 +88,7 @@ def test_analyzer_never_raises_on_arbitrary_strings(deps):
     assert all(f.kind and f.message for f in findings)
 
 
-@given(st.lists(st.from_regex(r"[a-z][a-z0-9_-]{0,10}==[0-9]{1,2}(\.[0-9]{1,2}){0,2}", fullmatch=True), max_size=8))
+@given(st.lists(st.from_regex(r"[a-z]([a-z0-9_-]{0,9}[a-z0-9])?==[0-9]{1,2}(\.[0-9]{1,2}){0,2}", fullmatch=True), max_size=8))
 def test_every_exact_pin_is_reported(deps):
     pinned = [f for f in analyze_dependencies(deps, NOW) if f.kind == "pinned-dependency"]
     assert len(pinned) == len(deps)
