@@ -32,6 +32,16 @@ class PackageRef(BaseModel):
     identifier: str = Field(..., description="PyPI name or GitHub repo URL")
 
 
+class DependencyInfo(BaseModel):
+    """What PyPI knows about one dependency. Filled in by the exhumer (task 9)."""
+
+    last_release_date: str | None = None
+    yanked_versions: list[str] = Field(default_factory=list)
+    supports_target_python: bool | None = Field(
+        default=None, description="None means unknown"
+    )
+
+
 class PackageSnapshot(BaseModel):
     """Everything exhumed about a package at a point in time."""
 
@@ -39,6 +49,9 @@ class PackageSnapshot(BaseModel):
     last_release_date: str | None = None
     declared_pythons: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
+    dependency_info: dict[str, DependencyInfo] = Field(
+        default_factory=dict, description="dependency name -> PyPI facts"
+    )
     source_map: dict[str, str] = Field(
         default_factory=dict, description="relative path -> file contents"
     )

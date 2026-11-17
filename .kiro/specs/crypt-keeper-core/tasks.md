@@ -1,17 +1,17 @@
 # Implementation Plan: Crypt Keeper Core
 
-- [ ] 1. Project skeleton and shared models
+- [x] 1. Project skeleton and shared models
   - Create `backend/` package layout, `requirements.txt`, and empty module files.
   - Define all Pydantic models in `backend/models.py` (`PackageRef`, `PackageSnapshot`,
     `Finding`, `AutopsyReport`, `RevivalResult`, `ProofOfLife`).
   - _Requirements: 2.4, 3.4, 4.1_
 
-- [ ] 2. Coroner: liveness classification
+- [x] 2. Coroner: liveness classification
   - Implement `classify_liveness` (pure) with configurable age thresholds.
   - Unit tests for alive/dormant/dead boundaries.
   - _Requirements: 2.1_
 
-- [ ] 3. Coroner: dependency analysis
+- [x] 3. Coroner: dependency analysis
   - Implement `analyze_dependencies` flagging unmaintained/yanked/incompatible deps.
   - Unit tests with fixture dependency sets.
   - _Requirements: 2.2_
