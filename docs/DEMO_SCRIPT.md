@@ -41,10 +41,10 @@ speed up the waiting stretch in editing and keep the verdict at normal speed.
 - [ ] Category: **Frankenstein**.
 - [ ] Public GitHub repo with an open-source license detected (MIT is in place).
 - [ ] `/.kiro` is committed and not in `.gitignore` (it is not).
-- [ ] **URL to the working app.** Open decision: the app executes package code, so a public host
-      needs a container around the sandbox, or `CRYPT_KEEPER_PROOF_OF_LIFE=off` (which keeps
-      exhume, autopsy, revival and diffs, and drops the verdict). Judges can also run it locally
-      from the README.
+- [ ] **URL to the working app.** Deploy with `docs/DEPLOY.md`, then run
+      `python scripts/smoke_test.py <URL>`. The public build runs proof of life only for the four
+      headstones; any other package gets the autopsy and revival without a verdict. Put the URL
+      and a one-line note about that in the Devpost form, and say judges can also run it locally.
 - [ ] Text description of features and functionality (the README is a good base).
 - [ ] Demo video under 3 minutes, public on YouTube, no copyrighted music.
 - [ ] Kiro usage write-up (`docs/KIRO_USAGE.md`). Check its caveats are still true before submitting.

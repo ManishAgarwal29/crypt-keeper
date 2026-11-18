@@ -71,6 +71,11 @@ The API rejects cross-origin and non-JSON POSTs and unknown Host headers, so ano
 cannot make your browser send code to a local Crypt Keeper. Configure with
 `CRYPT_KEEPER_ALLOWED_ORIGINS` and `CRYPT_KEEPER_ALLOWED_HOSTS`.
 
+**Public deployment.** The included `Dockerfile` runs proof of life only for a curated list of
+packages (`CRYPT_KEEPER_PROOF_ALLOWLIST`); everything else gets the autopsy and revival without
+being executed. See [`docs/DEPLOY.md`](docs/DEPLOY.md) for Cloud Run steps, what was tested, and
+what was not.
+
 ## Layout
 
 ```

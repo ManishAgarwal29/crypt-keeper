@@ -170,7 +170,10 @@ def test_health_reports_whether_proof_of_life_is_on(monkeypatch):
 def test_proof_status_warns_when_the_target_python_is_missing(monkeypatch):
     monkeypatch.setattr(main, "find_interpreter", lambda target: ("x", "3.11.6", False))
     body = client.get("/proof-of-life/status", params={"target_python": "3.12"}).json()
-    assert body == {"enabled": True, "target_python": "3.12", "python_used": "3.11.6", "target_python_matched": False}
+    assert body == {
+        "enabled": True, "target_python": "3.12", "python_used": "3.11.6",
+        "target_python_matched": False, "limited_to": None,
+    }
 
 
 def test_proof_status_when_disabled(monkeypatch):
@@ -196,6 +199,30 @@ def test_posts_from_the_configured_dev_origin_are_accepted():
 def test_same_origin_posts_are_accepted_on_any_port():
     r = client.post("/autopsy", json=snapshot_json(), headers={"Origin": "http://testserver", "Host": "testserver"})
     assert r.status_code == 200
+
+
+def test_https_origin_behind_a_tls_terminating_proxy_is_accepted():
+    """The deployed case: the browser says https, the app sees http and the proxy says so."""
+    r = client.post("/autopsy", json=snapshot_json(),
+                    headers={"Origin": "https://testserver", "Host": "testserver", "X-Forwarded-Proto": "https"})
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("headers", [
+    {"Origin": "https://testserver", "Host": "testserver"},                                   # https page, no proxy header
+    {"Origin": "http://testserver", "Host": "testserver", "X-Forwarded-Proto": "https"},     # http page against an https site
+    {"Origin": "https://testserver:9999", "Host": "testserver", "X-Forwarded-Proto": "https"},  # other port
+    {"Origin": "https://evil.example", "Host": "testserver", "X-Forwarded-Proto": "https"},   # other site
+    {"Origin": "null", "Host": "testserver", "X-Forwarded-Proto": "https"},                   # sandboxed iframe, file://
+])
+def test_the_scheme_stays_part_of_the_same_origin_check(headers):
+    assert client.post("/autopsy", json=snapshot_json(), headers=headers).status_code == 403
+
+
+def test_a_garbage_forwarded_proto_is_ignored():
+    r = client.post("/autopsy", json=snapshot_json(),
+                    headers={"Origin": "https://testserver", "Host": "testserver", "X-Forwarded-Proto": "javascript"})
+    assert r.status_code == 403
 
 
 def test_posts_without_an_origin_header_are_accepted():

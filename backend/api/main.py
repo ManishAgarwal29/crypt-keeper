@@ -40,6 +40,7 @@ from models import (
     ReviveResponse,
 )
 from necromancer.revive import revive, revived_snapshot
+from proof.policy import CURATED_REASON, is_allowed, parse_allowlist
 from proof.verdict import judge
 
 log = logging.getLogger("crypt_keeper")
@@ -75,8 +76,14 @@ async def request_guard(request: Request, call_next):
     """Refuse requests that a page on another site could send to a code-running endpoint."""
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("origin")
-        same_origin = f"{request.url.scheme}://{request.headers.get('host', '')}"
-        if origin is not None and origin != same_origin and origin not in ALLOWED_ORIGINS:
+        host = request.headers.get("host", "")
+        # Behind a proxy that terminates TLS the app sees plain http while the browser's Origin is
+        # https, so take the scheme from X-Forwarded-Proto when it is a valid value. The scheme
+        # stays part of the comparison: an http page must not pass as same-origin for an https API.
+        forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+        scheme = forwarded if forwarded in ("http", "https") else request.url.scheme
+        same_origin = bool(host) and origin == f"{scheme}://{host}"
+        if origin is not None and not same_origin and origin not in ALLOWED_ORIGINS:
             return JSONResponse(
                 {"detail": "The crypt does not open for strangers: origin not allowed."}, status_code=403
             )
@@ -99,6 +106,11 @@ async def handle_exhume_error(_: Request, exc: ExhumeError) -> JSONResponse:
 async def handle_unexpected(_: Request, exc: Exception) -> JSONResponse:
     log.exception("Unhandled error", exc_info=exc)
     return JSONResponse({"detail": "The crypt collapsed unexpectedly. See the server log."}, status_code=500)
+
+
+def proof_allowlist() -> frozenset[str] | None:
+    """Read each time so it can be changed without a restart in tests; None means unrestricted."""
+    return parse_allowlist(os.environ.get("CRYPT_KEEPER_PROOF_ALLOWLIST"))
 
 
 def _http_client() -> httpx.Client:
@@ -139,15 +151,21 @@ class ProofStatus(BaseModel):
     target_python: str
     python_used: str | None = None
     target_python_matched: bool = False
+    limited_to: list[str] | None = None  # the curated list, when this server has one
 
 
 @app.get("/proof-of-life/status", response_model=ProofStatus)
 def proof_status(target_python: str = "3.12") -> ProofStatus:
-    """Whether proof of life can run, and on which Python. Lets the UI warn before a long run."""
+    """Whether proof of life can run, on which Python, and for which packages."""
+    allowlist = proof_allowlist()
+    limited_to = sorted(allowlist) if allowlist is not None else None
     if not proof_enabled():
-        return ProofStatus(enabled=False, target_python=target_python)
+        return ProofStatus(enabled=False, target_python=target_python, limited_to=limited_to)
     _, version, matched = find_interpreter(target_python)
-    return ProofStatus(enabled=True, target_python=target_python, python_used=version, target_python_matched=matched)
+    return ProofStatus(
+        enabled=True, target_python=target_python, python_used=version,
+        target_python_matched=matched, limited_to=limited_to,
+    )
 
 
 class ExhumeRequest(BaseModel):
@@ -187,7 +205,13 @@ def proof_of_life(req: ProofRequest) -> ProofOfLife:
     """Import the snapshot's package in a throwaway virtualenv and run its tests.
 
     This executes the package's code. See api/sandbox.py for exactly what is and is not isolated.
+    It runs source the caller supplies, so a server with a curated list refuses it (403): the list
+    only protects anything if callers cannot bring their own code.
     """
+    if proof_allowlist() is not None:
+        raise ExhumeError(
+            "Running a posted snapshot is disabled on this server. Use /revive with a listed package.", 403
+        )
     return _run_proof(req.snapshot, req.target_python)
 
 
@@ -235,7 +259,12 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
     yield done("revive", t, f"{len(revival.diffs)} files changed")
 
     before = after = None
-    if req.run_proof_of_life:
+    if req.run_proof_of_life and not is_allowed(req.ref.identifier, proof_allowlist()):
+        # Not a curated package: report everything that needs no execution, and say why there is no verdict.
+        after = ProofOfLife(imported=False, skipped=True, error=CURATED_REASON)
+        for stage in ("proof_before", "proof_after"):
+            yield {"event": "stage", "stage": stage, "status": "skipped", "detail": "not on the curated list"}
+    elif req.run_proof_of_life:
         revived = revived_snapshot(snapshot, revival)
         t = time.perf_counter()
         with ThreadPoolExecutor(max_workers=2) as pool:

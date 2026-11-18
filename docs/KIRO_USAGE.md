@@ -79,8 +79,12 @@ Three hooks in [`.kiro/hooks/`](../.kiro/hooks/):
 - **Safety review on save** (an agent hook), for the sandbox, API and `proof/` files. It sends the
   agent back to `sandbox-safety.md` and asks whether any invariant was weakened.
 
-Caveat: Kiro reported that these hooks become active on the next session start, so during the
-build I ran the same commands by hand. I have not yet observed them firing on their own.
+The hooks became active in a later session, and the safety review fired on its own while I was
+preparing the public deployment. It did its job: my first edit to the API's Origin check stopped
+comparing the URL scheme, which let an `http://` page pass as same-origin for an `https://` API.
+The hook sent me back to `sandbox-safety.md`, I restored the scheme comparison (reading it from
+the proxy's `X-Forwarded-Proto`) and added tests for it. During the earlier build I ran the same
+commands by hand.
 
 ## MCP
 

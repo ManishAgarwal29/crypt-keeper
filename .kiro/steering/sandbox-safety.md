@@ -23,6 +23,11 @@ project. Do not weaken one without replacing its protection and its test.
   file and only a tail is kept.
 - **This is not a security boundary.** Do not describe it as a sandbox that makes untrusted code
   safe. Keep the docstring, README and UI footer honest about that.
+- **On a public host, only curated packages run** (`proof/policy.py`, `CRYPT_KEEPER_PROOF_ALLOWLIST`),
+  and `/proof-of-life`, which runs caller-supplied source, is refused while a list is set. Never
+  route a request-supplied package name or source to the sandbox without that check.
+- **No secrets in the service environment.** A same-user child can read its parent's environment
+  on Linux, so scrubbing the child's env is not enough.
 
 ## Telling the truth about results
 - A run on a different Python than the target can show failure, never success: keep

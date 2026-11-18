@@ -87,6 +87,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const ICONS = {
   pulse: [["polyline", { points: "2 12 7 12 9.5 5 14 19 16.5 12 22 12" }]],
   check: [["polyline", { points: "4 12.5 9.5 18 20 6.5" }]],
+  dash: [["line", { x1: 6, y1: 12, x2: 18, y2: 12 }]],
   cross: [["line", { x1: 5, y1: 5, x2: 19, y2: 19 }], ["line", { x1: 19, y1: 5, x2: 5, y2: 19 }]],
   down: [["line", { x1: 12, y1: 4, x2: 12, y2: 19 }], ["polyline", { points: "6 13 12 19 18 13" }]],
   warn: [["path", { d: "M12 3 2 21h20L12 3z" }], ["line", { x1: 12, y1: 10, x2: 12, y2: 15 }], ["line", { x1: 12, y1: 18, x2: 12, y2: 18.1 }]],
@@ -143,7 +144,7 @@ function setStage(id, status, event = {}) {
   const node = stageNodes[id];
   if (!node) return;
   node.li.className = `stage is-${status}`;
-  fill(node.state, status === "done" && icon("check"), status === "failed" && icon("cross"));
+  fill(node.state, status === "done" && icon("check"), status === "failed" && icon("cross"), status === "skipped" && icon("dash"));
   if (status === "running") {
     node.startedAt = performance.now();
     node.status.textContent = "running";
@@ -156,6 +157,10 @@ function setStage(id, status, event = {}) {
   } else if (status === "failed") {
     node.startedAt = null;
     node.status.textContent = "failed";
+  } else if (status === "skipped") {
+    node.startedAt = null;
+    node.meta.textContent = event.detail ?? "skipped";
+    node.status.textContent = `skipped: ${event.detail ?? ""}`;
   }
 }
 
@@ -233,6 +238,7 @@ async function run(target, python) {
     await readLines(response.body, (event) => {
       if (event.event === "stage") {
         if (event.status === "start") setStage(event.stage, "running");
+        else if (event.status === "skipped") setStage(event.stage, "skipped", event);
         else setStage(event.stage, "done", event);
       } else if (event.event === "result") {
         state.finished = true;
@@ -481,11 +487,15 @@ async function refreshPythonHint() {
     if (!response.ok) return;
     const status = await response.json();
     if (pythonSelect.value !== target) return;
-    pythonHint.textContent = !status.enabled
+    const limit = status.limited_to
+      ? ` On this server it is limited to: ${status.limited_to.join(", ")}. Any other package gets the autopsy and revival, without a verdict. Run Crypt Keeper locally to check any package.`
+      : "";
+    pythonHint.textContent = (!status.enabled
       ? "Proof of life is switched off on this server, so verdicts will read unverified."
       : status.target_python_matched
         ? `Proof of life will run on Python ${status.python_used}.`
-        : `Python ${target} is not installed on this machine. Proof of life will run on ${status.python_used}, so the verdict will read unverified.`;
+        : `Python ${target} is not installed on this machine. Proof of life will run on ${status.python_used}, so the verdict will read unverified.`)
+      + (status.enabled ? limit : "");
   } catch { /* the hint is a courtesy; ignore failures */ }
 }
 

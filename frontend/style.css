@@ -156,6 +156,8 @@ input[type="text"]:focus, select:focus { border-color: var(--accent); }
 .stage.is-waiting { opacity: 0.55; }
 .stage.is-running { background: rgba(124, 255, 155, 0.06); border-color: rgba(124, 255, 155, 0.35); color: var(--text); }
 .stage.is-done .stage-state { color: var(--accent); }
+.stage.is-skipped { opacity: 0.75; }
+.stage.is-skipped .stage-state { color: var(--muted); }
 .stage.is-failed { background: rgba(255, 128, 128, 0.07); border-color: rgba(255, 128, 128, 0.4); }
 .stage.is-failed .stage-state { color: var(--danger); }
 .stage.is-waiting .stage-state::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 50%; border: 2px solid var(--muted); }

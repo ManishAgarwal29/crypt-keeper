@@ -11,7 +11,7 @@ def judge(before: ProofOfLife | None, after: ProofOfLife | None) -> tuple[Verdic
     package that imports on 3.11 may still be dead on 3.12.
     """
     if after is None or after.skipped:
-        return "unverified", "Proof of life was not run."
+        return "unverified", (after.error if after is not None and after.error else "Proof of life was not run.")
 
     wrong_python = after.python_used is not None and not after.target_python_matched
     before_ran = before is not None and not before.skipped
