@@ -1,9 +1,12 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "crypt-keeper": {
+      "type": "stdio",
       "command": "python",
       "args": ["mcp-server/server.py"],
-      "env": { "FASTMCP_LOG_LEVEL": "ERROR" }
+      "env": { "FASTMCP_LOG_LEVEL": "ERROR" },
+      "cwd": "${PLUGIN_ROOT}"
     }
   }
 }

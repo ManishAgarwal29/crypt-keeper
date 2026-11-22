@@ -6,7 +6,11 @@ This is the only code that executes the package under revival. What it does and 
   * Dependencies are installed into a new virtualenv with `--only-binary=:all:`, so no
     dependency's setup.py runs. Pip options, URLs and paths in dependency strings are rejected.
   * The package runs with a scrubbed environment (no API tokens, HOME pointed at the temp dir),
-    a hard timeout per step, and its whole process tree is killed on timeout.
+    a hard timeout per step, and its whole process tree is killed when the step ends.
+  * Output, disk use and (on Linux) file size, memory, core dumps and process count are capped.
+    Processes left behind by a package are killed after every step: by process group, and on
+    Linux also by a per-run marker in their environment. A process that scrubs its own
+    environment and starts a new session can still escape; the container is the real boundary.
 
 It is NOT a security boundary. The package's own code runs as the current user, with network
 access and read access to the user's files. Only revive packages you would be willing to
@@ -16,12 +20,15 @@ CRYPT_KEEPER_PROOF_OF_LIFE=off to disable it.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,8 +39,11 @@ from proof.discovery import (
     RUNNER_SCRIPT,
     discover_modules,
     find_shipped_tests,
+    limited_command,
     parse_pytest_summary,
     pick_primary,
+    pytest_command,
+    redact,
     safe_relative_path,
     smoke_calls,
     validate_dependencies,
@@ -49,6 +59,22 @@ IMPORT_TIMEOUT = 60
 TEST_TIMEOUT = 180
 TOTAL_BUDGET = 600
 LOG_TAIL = 6000
+MAX_OUTPUT_BYTES = 10_000_000
+MAX_RUN_DIR_BYTES = 1_000_000_000
+POLL_SECONDS = 0.1
+DIR_CHECK_SECONDS = 2.0
+MIN_STEP_SECONDS = 2.0
+MAX_CACHED_INTERPRETERS = 16
+RUN_MARKER_ENV = "CRYPT_KEEPER_RUN"
+CHILD_MEMORY_ENV = "CRYPT_KEEPER_CHILD_MEM_MB"
+DEFAULT_CHILD_MEMORY_MB = 3072
+MAX_CHILD_FILE_BYTES = 256_000_000
+MAX_CHILD_PROCESSES = 2048
+LOGGER = logging.getLogger("crypt_keeper.sandbox")
+
+
+class OutOfTime(Exception):
+    """The run's total time budget is spent."""
 
 _BASE_ENV_KEYS = ["PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "SystemDrive", "WINDIR", "COMSPEC"]
 _PIP_ENV_KEYS = [
@@ -62,10 +88,49 @@ class RunResult:
     returncode: int | None
     output: str
     timed_out: bool
+    limit: str | None = None  # "timeout", "output" or "disk" when the step was stopped for exceeding one
 
 
-def run_command(cmd: list[str], cwd: Path | str, env: dict[str, str], timeout: float, tail: int = LOG_TAIL) -> RunResult:
-    """Run `cmd`, capturing combined output to a temp file. Kills the process tree on timeout."""
+def child_limits() -> dict[str, int]:
+    """Resource limits for every sandboxed process (POSIX only; empty on Windows)."""
+    if os.name == "nt":
+        return {}
+    limits = {"RLIMIT_CORE": 0, "RLIMIT_FSIZE": MAX_CHILD_FILE_BYTES, "RLIMIT_NPROC": MAX_CHILD_PROCESSES}
+    try:
+        mem_mb = int(os.environ.get(CHILD_MEMORY_ENV, DEFAULT_CHILD_MEMORY_MB))
+    except ValueError:
+        mem_mb = DEFAULT_CHILD_MEMORY_MB
+    if mem_mb > 0:
+        limits["RLIMIT_AS"] = mem_mb * 1024 * 1024
+    return limits
+
+
+def _dir_exceeds(path: Path | str, cap: int) -> bool:
+    """True once the files under `path` add up to more than `cap` bytes. Stops counting at the cap."""
+    total = 0
+    for root, _dirs, files in os.walk(path, followlinks=False):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(root, name)).st_size
+            except OSError:
+                continue
+            if total > cap:
+                return True
+    return False
+
+
+def run_command(
+    cmd: list[str], cwd: Path | str, env: dict[str, str], timeout: float, tail: int = LOG_TAIL,
+    *, watch_dir: Path | str | None = None, limits: dict[str, int] | None = None,
+) -> RunResult:
+    """Run `cmd`, capturing combined output to a temp file.
+
+    Stops the process and its tree when the timeout passes, when the output exceeds MAX_OUTPUT_BYTES, or
+    (with `watch_dir`) when that directory grows past MAX_RUN_DIR_BYTES. The tree is killed when the
+    command ends normally too, so a daemon the package started does not outlive the step.
+    """
+    if limits and os.name != "nt":
+        cmd = limited_command(sys.executable, cmd, limits)
     popen_kwargs: dict = {"start_new_session": True} if os.name != "nt" else {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
     with tempfile.TemporaryFile() as out:
         try:
@@ -73,17 +138,39 @@ def run_command(cmd: list[str], cwd: Path | str, env: dict[str, str], timeout: f
                 cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, **popen_kwargs
             )
         except OSError as exc:
-            return RunResult(None, f"Could not start {cmd[0]}: {exc}", False)
-        timed_out = False
-        try:
-            proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
+            LOGGER.warning("Could not start %s: %s", cmd[0], exc)
+            return RunResult(None, f"Could not start {os.path.basename(cmd[0])}.", False)
+        limit = _wait(proc, out, timeout, watch_dir)
+        if limit or os.name != "nt":
             _kill_tree(proc)
         size = out.seek(0, os.SEEK_END)
         out.seek(max(0, size - tail * 4))
         text = out.read().decode("utf-8", errors="replace")
-    return RunResult(None if timed_out else proc.returncode, text[-tail:], timed_out)
+    return RunResult(None if limit else proc.returncode, text[-tail:], limit == "timeout", limit)
+
+
+def _wait(proc: subprocess.Popen, out, timeout: float, watch_dir: Path | str | None) -> str | None:
+    """Wait for `proc`. Returns the limit that ended the wait, or None if the process exited by itself."""
+    started = time.monotonic()
+    next_dir_check = started + DIR_CHECK_SECONDS
+    while True:
+        try:
+            proc.wait(timeout=POLL_SECONDS)
+            return None
+        except subprocess.TimeoutExpired:
+            pass
+        now = time.monotonic()
+        if now - started >= timeout:
+            return "timeout"
+        try:
+            if os.fstat(out.fileno()).st_size > MAX_OUTPUT_BYTES:
+                return "output"
+        except OSError:
+            pass
+        if watch_dir is not None and now >= next_dir_check:
+            if _dir_exceeds(watch_dir, MAX_RUN_DIR_BYTES):
+                return "disk"
+            next_dir_check = time.monotonic() + DIR_CHECK_SECONDS
 
 
 def _kill_tree(proc: subprocess.Popen) -> None:
@@ -94,14 +181,54 @@ def _kill_tree(proc: subprocess.Popen) -> None:
             import signal
             os.killpg(proc.pid, signal.SIGKILL)
     except (OSError, subprocess.SubprocessError):
-        proc.kill()
+        try:
+            proc.kill()
+        except OSError:
+            pass
     try:
         proc.wait(timeout=10)
     except subprocess.TimeoutExpired:
         pass
 
 
-def _env(home: Path, *, pip: bool = False, pythonpath: str | None = None) -> dict[str, str]:
+def reap_run(run_id: str) -> int:
+    """Kill every process that carries this run's marker in its environment (Linux). Returns how many."""
+    proc_dir = Path("/proc")
+    if not sys.platform.startswith("linux") or not proc_dir.is_dir():
+        return 0
+    import signal
+    marker = f"{RUN_MARKER_ENV}={run_id}".encode()
+    killed = 0
+    for _ in range(5):  # a process may fork between the scan and the kill, so look again
+        found = 0
+        for entry in proc_dir.iterdir():
+            if not entry.name.isdigit() or int(entry.name) == os.getpid():
+                continue
+            try:
+                environ = (entry / "environ").read_bytes()
+            except OSError:
+                continue
+            if marker in environ.split(b"\0"):
+                try:
+                    os.kill(int(entry.name), signal.SIGKILL)
+                    found += 1
+                except OSError:
+                    pass
+        killed += found
+        if not found:
+            break
+    return killed
+
+
+def _step_timeout(step_timeout: float, deadline: float) -> float:
+    """The step's own timeout, cut down to what is left of the run's budget."""
+    remaining = deadline - time.monotonic()
+    if remaining < MIN_STEP_SECONDS:
+        raise OutOfTime
+    return min(step_timeout, remaining)
+
+
+def _env(home: Path, *, pip: bool = False, pythonpath: str | None = None, run_id: str | None = None) -> dict[str, str]:
     """A minimal environment: no tokens or user config leak into the package or pip."""
     keys = _BASE_ENV_KEYS + (_PIP_ENV_KEYS if pip else [])
     env = {k: os.environ[k] for k in keys if k in os.environ}
@@ -112,6 +239,8 @@ def _env(home: Path, *, pip: bool = False, pythonpath: str | None = None) -> dic
     })
     if pythonpath:
         env["PYTHONPATH"] = pythonpath
+    if run_id:
+        env[RUN_MARKER_ENV] = run_id
     return env
 
 
@@ -129,6 +258,38 @@ def _interpreter_version(exe: str, env: dict[str, str]) -> str | None:
     return last if r.returncode == 0 and _parse_minor(last) else None
 
 
+def _plausible(version: tuple[int, int]) -> bool:
+    return version[0] == 3 and 8 <= version[1] <= 20
+
+
+_interpreters: dict[str, tuple[str, str, bool]] = {}
+_interpreters_lock = threading.Lock()
+
+
+def clear_interpreter_cache() -> None:
+    with _interpreters_lock:
+        _interpreters.clear()
+
+
+def find_interpreter_cached(target_python: str) -> tuple[str, str, bool]:
+    """`find_interpreter`, remembered per major.minor so requests do not each spawn probe processes.
+
+    Every target that is not a plausible Python 3 version shares one entry, and the cache is bounded.
+    """
+    want = _parse_minor(target_python)
+    key = f"{want[0]}.{want[1]}" if want and _plausible(want) else "other"
+    with _interpreters_lock:
+        hit = _interpreters.get(key)
+    if hit:
+        return hit
+    found = find_interpreter(key if key != "other" else target_python)
+    with _interpreters_lock:
+        while len(_interpreters) >= MAX_CACHED_INTERPRETERS:
+            _interpreters.pop(next(iter(_interpreters)))
+        _interpreters[key] = found
+    return found
+
+
 def find_interpreter(target_python: str, env: dict[str, str] | None = None) -> tuple[str, str, bool]:
     """(executable, version, matched): an interpreter for the target Python, else the current one.
 
@@ -137,6 +298,8 @@ def find_interpreter(target_python: str, env: dict[str, str] | None = None) -> t
     """
     env = env if env is not None else _env(Path(tempfile.gettempdir()))
     want = _parse_minor(target_python)
+    if want and not _plausible(want):
+        want = None
     candidates: list[str] = []
     if want:
         if sys.version_info[:2] == want:
@@ -179,26 +342,32 @@ def _write_sources(root: Path, source_map: dict[str, str]) -> str | None:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(content.encode("utf-8"))
         except (OSError, UnicodeEncodeError) as exc:
-            return f"Could not write {path!r}: {exc}"
+            LOGGER.warning("Could not write %r: %s", path, exc)
+            return f"Could not write {path!r} into the sandbox."
     return None
 
 
-def _install(py: str, reqs: list[str], cwd: Path, home: Path, log: list[str], deadline: float) -> list[str]:
+def _install(py: str, reqs: list[str], cwd: Path, home: Path, log: list[str], deadline: float, step=None, run_id: str | None = None) -> list[str]:
     """Install requirements wheel-only. Falls back to one at a time. Returns the ones that failed."""
     if not reqs:
         return []
+    if step is None:
+        def step(cmd, cwd, env, timeout):
+            return run_command(cmd, cwd, env, _step_timeout(timeout, deadline))
     base = [py, "-m", "pip", "install", "--only-binary=:all:", "--no-input", "--disable-pip-version-check", "--quiet", "--"]
-    env = _env(home, pip=True)
-    r = run_command(base + reqs, cwd, env, INSTALL_TIMEOUT)
+    env = _env(home, pip=True, run_id=run_id)
+    r = step(base + reqs, cwd, env, INSTALL_TIMEOUT)
     if r.returncode == 0:
         return []
     log.append(f"Installing all dependencies failed; retrying one by one.\n{r.output[-1500:]}")
     failed: list[str] = []
-    for req in reqs:
-        if time.monotonic() > deadline:
-            failed.append(req)
-            continue
-        if run_command(base + [req], cwd, env, SINGLE_INSTALL_TIMEOUT).returncode != 0:
+    for i, req in enumerate(reqs):
+        try:
+            ok = step(base + [req], cwd, env, SINGLE_INSTALL_TIMEOUT).returncode == 0
+        except OutOfTime:
+            failed.extend(reqs[i:])
+            break
+        if not ok:
             failed.append(req)
     log.append(f"Could not install (wheel-only): {failed}")
     return failed
@@ -219,10 +388,24 @@ def run_proof_of_life(snapshot: PackageSnapshot, target_python: str = "3.12") ->
         return ProofOfLife(imported=False, skipped=True, error=f"Proof of life is disabled ({ENABLE_ENV}=off).")
     try:
         result = _run(snapshot, target_python, started)
-    except Exception as exc:  # a sandbox failure must never take the API down
-        result = ProofOfLife(imported=False, error=f"Sandbox failure: {type(exc).__name__}: {exc}")
+    except OutOfTime:
+        result = ProofOfLife(imported=False, error=f"The run used up its time budget ({TOTAL_BUDGET}s) before it could finish.")
+    except Exception:  # a sandbox failure must never take the API down, nor show the client server details
+        LOGGER.exception("Sandbox failure while running %s", snapshot.ref.identifier)
+        result = ProofOfLife(imported=False, error="The sandbox failed unexpectedly. The details were logged on the server.")
     result.duration_seconds = round(time.monotonic() - started, 1)
     return result
+
+
+def _limit_message(result: RunResult, what: str, timeout: float) -> str | None:
+    """Why a step was stopped, in words a user can act on. None if it was not stopped by a limit."""
+    if result.limit == "timeout":
+        return f"{what} timed out after {timeout:g}s."
+    if result.limit == "output":
+        return f"{what} was stopped: it went over the output limit ({MAX_OUTPUT_BYTES // 1_000_000} MB)."
+    if result.limit == "disk":
+        return f"{what} was stopped: it went over the disk limit ({MAX_RUN_DIR_BYTES // 1_000_000} MB)."
+    return None
 
 
 def _run(snapshot: PackageSnapshot, target_python: str, started: float) -> ProofOfLife:
@@ -232,11 +415,14 @@ def _run(snapshot: PackageSnapshot, target_python: str, started: float) -> Proof
     if not plan.modules:
         return ProofOfLife(imported=False, error="No importable Python package or module found in the source.")
 
-    interpreter, version, matched = find_interpreter(target_python)
+    interpreter, version, matched = find_interpreter_cached(target_python)
     tests = find_shipped_tests(paths)
     deps, rejected = validate_dependencies(snapshot.dependencies)
     primary = pick_primary(plan.modules, snapshot.ref.identifier)
     calls = smoke_calls(plan, snapshot.source_map)
+    run_id = uuid.uuid4().hex
+    limits = child_limits()
+    replacements: dict[str, str] = {interpreter: "<python>", sys.executable: "<python>", str(Path.home()): "~"}
 
     log = [f"Ran on Python {version}."]
     if snapshot.truncated:
@@ -246,56 +432,76 @@ def _run(snapshot: PackageSnapshot, target_python: str, started: float) -> Proof
     if rejected:
         log.append(f"Skipped dependencies that are not plain requirements: {rejected}")
 
+    def clean(text: str | None) -> str | None:
+        return redact(text, replacements) if text else text
+
     def outcome(**kw) -> ProofOfLife:
-        return ProofOfLife(python_used=version, target_python_matched=matched, output=_tail("\n".join(log)), **kw)
+        if kw.get("error"):
+            kw["error"] = clean(kw["error"])
+        if kw.get("import_results"):
+            kw["import_results"] = {k: clean(v) for k, v in kw["import_results"].items()}
+        return ProofOfLife(python_used=version, target_python_matched=matched, output=_tail(clean("\n".join(log))), **kw)
 
     with tempfile.TemporaryDirectory(prefix="crypt-keeper-", ignore_cleanup_errors=True) as tmp_name:
         tmp = Path(tmp_name)
+        for form in (tmp, tmp.resolve()):
+            replacements[str(form)] = "<sandbox>"
+            replacements[form.as_posix()] = "<sandbox>"
         src, home, venv_dir = tmp / "src", tmp / "home", tmp / "venv"
         src.mkdir()
         home.mkdir()
 
-        problem = _write_sources(src, snapshot.source_map)
-        if problem:
-            return outcome(imported=False, error=problem)
+        def step(cmd, cwd, env, timeout, tail: int = LOG_TAIL) -> RunResult:
+            """One sandboxed command: clipped to the remaining budget, limited, watched, and cleaned up after."""
+            try:
+                return run_command(cmd, cwd, env, _step_timeout(timeout, deadline), tail, watch_dir=tmp, limits=limits)
+            finally:
+                reap_run(run_id)
 
-        made = run_command([interpreter, "-m", "venv", str(venv_dir)], tmp, _env(home), VENV_TIMEOUT)
-        if made.returncode != 0:
-            log.append(made.output)
-            return outcome(imported=False, error="Could not create the sandbox virtualenv.")
-        py = _venv_python(venv_dir)
+        try:
+            problem = _write_sources(src, snapshot.source_map)
+            if problem:
+                return outcome(imported=False, error=problem)
 
-        failed_installs = _install(py, deps + (["pytest"] if tests else []), tmp, home, log, deadline)
+            made = step([interpreter, "-m", "venv", str(venv_dir)], tmp, _env(home, run_id=run_id), VENV_TIMEOUT)
+            if made.returncode != 0:
+                LOGGER.warning("Could not create the virtualenv: %s", made.output)
+                return outcome(imported=False, error="Could not create the sandbox virtualenv.")
+            py = _venv_python(venv_dir)
 
-        roots = [str(src / r) if r else str(src) for r in plan.roots]
-        (tmp / "runner.py").write_text(RUNNER_SCRIPT, encoding="utf-8")
-        (tmp / CONFIG_FILENAME).write_text(json.dumps({
-            "roots": roots, "modules": plan.modules, "calls": calls, "result": str(tmp / RESULT_FILENAME),
-        }), encoding="utf-8")
+            failed_installs = _install(py, deps + (["pytest"] if tests else []), tmp, home, log, deadline, step, run_id)
 
-        ran = run_command([py, "-I", "-B", str(tmp / "runner.py"), str(tmp / CONFIG_FILENAME)], src, _env(home), IMPORT_TIMEOUT)
-        if ran.output.strip():
-            log.append(f"Import check output:\n{ran.output}")
-        results = _read_json(tmp / RESULT_FILENAME)
+            roots = [str(src / r) if r else str(src) for r in plan.roots]
+            (tmp / "runner.py").write_text(RUNNER_SCRIPT, encoding="utf-8")
+            (tmp / CONFIG_FILENAME).write_text(json.dumps({
+                "roots": roots, "modules": plan.modules, "calls": calls, "result": str(tmp / RESULT_FILENAME),
+            }), encoding="utf-8")
 
-        counts = None
-        if tests:
-            tested = run_command(
-                [py, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", "--continue-on-collection-errors",
-                 "-o", "addopts=", "--rootdir", str(src), *tests],
-                src, _env(home, pythonpath=os.pathsep.join(roots)), TEST_TIMEOUT,
-            )
-            counts = parse_pytest_summary(tested.output)
-            log.append(f"Shipped tests{' (timed out)' if tested.timed_out else ''}:\n{tested.output[-2500:]}")
+            ran = step([py, "-I", "-B", str(tmp / "runner.py"), str(tmp / CONFIG_FILENAME)], src, _env(home, run_id=run_id), IMPORT_TIMEOUT)
+            if ran.output.strip():
+                log.append(f"Import check output:\n{ran.output}")
+            results = _read_json(tmp / RESULT_FILENAME)
+
+            counts = None
+            if tests:
+                try:
+                    tested = step(
+                        pytest_command(py, str(src), tests), src, _env(home, pythonpath=os.pathsep.join(roots), run_id=run_id), TEST_TIMEOUT,
+                    )
+                except OutOfTime:
+                    log.append("Shipped tests were skipped: the run's time budget was spent.")
+                else:
+                    counts = parse_pytest_summary(tested.output)
+                    note = _limit_message(tested, "The shipped tests", TEST_TIMEOUT)
+                    log.append(f"Shipped tests{' (' + note + ')' if note else ''}:\n{tested.output[-2500:]}")
+        finally:
+            reap_run(run_id)
 
     imports: dict[str, str | None] = results.get("imports", {}) if results else {}
     imported = bool(results) and primary in imports and imports[primary] is None
     error = None
     if not imported:
-        error = imports.get(primary) or (
-            f"Import check timed out after {IMPORT_TIMEOUT}s." if ran.timed_out
-            else "Import check crashed before reporting a result."
-        )
+        error = imports.get(primary) or _limit_message(ran, "Import check", IMPORT_TIMEOUT) or "Import check crashed before reporting a result."
         if failed_installs:
             error += f" (could not install: {', '.join(failed_installs)})"
 

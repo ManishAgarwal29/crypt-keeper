@@ -296,8 +296,60 @@ def test_plugin_manifest_follows_the_agent_plugins_schema():
     assert "MIT" in (ROOT / "LICENSE").read_text(encoding="utf-8").splitlines()[0] and manifest["license"] == "MIT"
 
 
-def test_the_power_ships_a_skill_and_a_server_that_exist():
+MCP_SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
+STDIO_SERVER_KEYS = {"type", "command", "args", "env", "cwd"}
+PLUGIN_CWD = re.compile(r"^(?:\./|\$\{PLUGIN_ROOT\}(?:/|$)|\$\{PLUGIN_DATA\}(?:/|$))")
+
+
+def power_server() -> dict:
+    return json.loads((ROOT / "mcp.json").read_text(encoding="utf-8"))["mcpServers"]["crypt-keeper"]
+
+
+def test_the_power_ships_a_skill():
     assert (ROOT / "skills" / "triage-abandoned-package" / "SKILL.md").is_file()
-    servers = json.loads((ROOT / "mcp.json").read_text(encoding="utf-8"))["mcpServers"]
-    assert set(servers) == {"crypt-keeper"}
-    assert all((ROOT / a).is_file() for a in servers["crypt-keeper"]["args"] if a.endswith(".py"))
+
+
+def test_mcp_json_follows_the_agent_plugins_schema():
+    """Rules from https://agent-plugins.org/schemas/1.0.0/mcp.schema.json. An earlier version of this file
+    lacked `$schema` and `type` and an older, looser test still passed it."""
+    config = json.loads((ROOT / "mcp.json").read_text(encoding="utf-8"))
+    assert set(config) == {"$schema", "mcpServers"}
+    assert config["$schema"] == MCP_SCHEMA_URL
+    assert set(config["mcpServers"]) == {"crypt-keeper"}
+    server = power_server()
+    assert set(server) <= STDIO_SERVER_KEYS, f"unknown keys: {set(server) - STDIO_SERVER_KEYS}"
+    assert server["type"] == "stdio"
+    assert isinstance(server["command"], str) and server["command"]
+    assert all(isinstance(a, str) for a in server.get("args", []))
+    env = server.get("env", {})
+    assert all(isinstance(v, str) for v in env.values())
+    assert not {"PLUGIN_ROOT", "PLUGIN_DATA"} & set(env), "those names are reserved"
+
+
+def test_the_power_does_not_depend_on_the_workspace_it_is_opened_in():
+    """The script path is relative, so the working directory must be pinned to the plugin root."""
+    server = power_server()
+    assert any(a.endswith(".py") and not Path(a).is_absolute() for a in server["args"])
+    assert PLUGIN_CWD.match(server["cwd"]) and server["cwd"].startswith(("${PLUGIN_ROOT}", "./"))
+    assert all((ROOT / a).is_file() for a in server["args"] if a.endswith(".py"))
+
+
+def test_the_power_server_starts_exactly_as_its_manifest_says():
+    """Launch it the way Kiro would, with the working directory set to the plugin root (here: the repo root)."""
+    pytest.importorskip("mcp")
+    import asyncio
+    import sys
+
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    server = power_server()
+
+    async def talk() -> list[str]:
+        params = StdioServerParameters(command=sys.executable, args=server["args"], cwd=ROOT)
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                return sorted(t.name for t in (await session.list_tools()).tools)
+
+    assert asyncio.run(asyncio.wait_for(talk(), timeout=60)) == ["get_pypi_metadata", "get_repo_tree"]

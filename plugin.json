@@ -12,11 +12,14 @@
   "keywords": [
     "python",
     "pypi",
+    "abandoned",
     "abandoned-package",
     "unmaintained",
     "dependency",
+    "deprecated",
     "deprecated-api",
     "python-upgrade",
-    "revive"
+    "revive",
+    "crypt-keeper"
   ]
 }

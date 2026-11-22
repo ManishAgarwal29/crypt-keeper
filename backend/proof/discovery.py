@@ -6,6 +6,7 @@ needs to decide beforehand is here so it can be tested without a virtualenv.
 from __future__ import annotations
 
 import ast
+import json
 import re
 from dataclasses import dataclass, field
 from posixpath import basename, dirname
@@ -237,3 +238,35 @@ def parse_pytest_summary(text: str) -> PytestCounts | None:
                 skipped=counts.get("skipped", 0),
             )
     return None
+
+
+# Static launcher: applies resource limits, then replaces itself with the real command. The limits arrive as
+# JSON in argv[1] and the command as plain argv, so no untrusted value is ever interpreted as code.
+LIMIT_LAUNCHER = '''\
+import json, os, resource, sys
+for name, value in json.loads(sys.argv[1]).items():
+    which = getattr(resource, name)
+    hard = resource.getrlimit(which)[1]
+    if hard != resource.RLIM_INFINITY and value > hard:
+        value = hard
+    resource.setrlimit(which, (value, value))
+os.execvp(sys.argv[2], sys.argv[2:])
+'''
+
+
+def limited_command(python: str, cmd: list[str], limits: dict[str, int]) -> list[str]:
+    """Wrap `cmd` so it starts with the given resource limits (POSIX). `limits` maps RLIMIT_* names to values."""
+    return [python, "-I", "-c", LIMIT_LAUNCHER, json.dumps(limits), *cmd]
+
+
+def pytest_command(python: str, src: str, tests: list[str]) -> list[str]:
+    """The pytest invocation. `--` keeps a hostile test path from being read as an option."""
+    return [python, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", "--continue-on-collection-errors",
+            "-o", "addopts=", "--rootdir", src, "--", *tests]
+
+
+def redact(text: str, replacements: dict[str, str]) -> str:
+    """Replace each key with its label, longest key first so a path is not half-replaced by its parent."""
+    for key in sorted((k for k in replacements if k), key=len, reverse=True):
+        text = text.replace(key, replacements[key])
+    return text

@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from api.exhumer import ExhumeError, exhume
 from api.guards import RequestGuardMiddleware
 from api.limits import BodyLimitMiddleware
-from api.sandbox import find_interpreter, proof_enabled, run_proof_of_life
+from api.sandbox import find_interpreter_cached as find_interpreter, proof_enabled, run_proof_of_life
 from coroner.autopsy import run_autopsy
 from models import (
     AutopsyReport,
@@ -42,7 +42,16 @@ from models import (
     ReviveResponse,
 )
 from necromancer.revive import revive, revived_snapshot
-from proof.policy import is_allowed, is_public, resolve_allowlist, skip_reason
+from proof.discovery import validate_dependencies
+from proof.policy import (
+    is_allowed,
+    is_public,
+    load_approved,
+    resolve_allowlist,
+    skip_reason,
+    unapproved_dependencies,
+    unapproved_reason,
+)
 from proof.verdict import judge
 
 log = logging.getLogger("crypt_keeper")
@@ -50,6 +59,7 @@ log = logging.getLogger("crypt_keeper")
 MAX_BODY_BYTES = 25_000_000
 SLOT_WAIT_SECONDS = 30.0
 _proof_slots = threading.BoundedSemaphore(int(os.environ.get("CRYPT_KEEPER_MAX_PROOFS", "4")))
+_exhume_slots = threading.BoundedSemaphore(int(os.environ.get("CRYPT_KEEPER_MAX_EXHUMES", "8")))
 
 
 def _csv_env(name: str, default: str) -> list[str]:
@@ -110,18 +120,42 @@ def _http_client() -> httpx.Client:
 
 
 def _exhume(ref: PackageRef, target_python: str) -> PackageSnapshot:
-    with _http_client() as client:
-        return exhume(ref, target_python, client)
+    """Fetch a package, at most CRYPT_KEEPER_MAX_EXHUMES at a time: each one holds an archive in memory."""
+    if not _exhume_slots.acquire(timeout=SLOT_WAIT_SECONDS):
+        raise ExhumeError("The crypt is busy: too many exhumations are in progress. Try again shortly.", 503)
+    try:
+        with _http_client() as client:
+            return exhume(ref, target_python, client)
+    finally:
+        _exhume_slots.release()
 
 
 def _run_proof(snapshot: PackageSnapshot, target_python: str) -> ProofOfLife:
     """Run the sandbox, waiting briefly for a free slot so a burst cannot exhaust the machine."""
+    blocked = dependency_block(snapshot)
+    if blocked:
+        return ProofOfLife(imported=False, skipped=True, error=blocked)
     if not _proof_slots.acquire(timeout=SLOT_WAIT_SECONDS):
         raise ExhumeError("The crypt is busy: too many proof-of-life runs are in progress. Try again shortly.", 503)
     try:
         return run_proof_of_life(snapshot, target_python)
     finally:
         _proof_slots.release()
+
+
+def dependency_block(snapshot: PackageSnapshot) -> str | None:
+    """Why this snapshot's dependencies may not be installed on this server, or None if they may.
+
+    Applies on a public host with a curated list: approving a package name does not approve what it
+    installs. Anything the reviewed file does not list for the package is refused.
+    """
+    if proof_allowlist() is None or not is_public(os.environ.get("CRYPT_KEEPER_PUBLIC")):
+        return None
+    deps, _rejected = validate_dependencies(snapshot.dependencies)
+    bad = unapproved_dependencies(snapshot.ref.identifier, deps, load_approved())
+    if bad == []:
+        return None
+    return unapproved_reason(snapshot.ref.identifier, bad)
 
 
 _ERRORS = {
@@ -277,7 +311,7 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
                 yield done(stage, t, "skipped" if proof.skipped else "alive" if proof.imported else "dead", record=False)
         timings["proof_of_life"] = round(time.perf_counter() - t, 2)
 
-    verdict, reason = judge(before, after)
+    verdict, reason = judge(before, after, truncated=snapshot.truncated)
     yield {
         "event": "result",
         "response": ReviveResponse(

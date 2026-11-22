@@ -359,9 +359,10 @@ def test_extract_archive_flags_oversize_python_files_as_truncation(monkeypatch):
     assert archive.truncated and list(archive.py_files) == ["small.py"]
 
 
-def test_undecodable_files_are_not_counted_as_truncation():
+def test_undecodable_files_are_counted_as_truncation():
+    """A file we cannot read is a file missing from the result, so the result is incomplete."""
     archive = extract_archive(make_tar({"p-1/a.py": b"x = 1", "p-1/bad.py": b"\xff\xfe"}), "p.tar.gz")
-    assert not archive.truncated and list(archive.py_files) == ["a.py"]
+    assert archive.truncated and list(archive.py_files) == ["a.py"]
 
 
 def test_exhume_pypi_reads_dependencies_from_the_sdist_when_pypi_has_none():

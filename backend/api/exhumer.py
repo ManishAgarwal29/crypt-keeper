@@ -23,6 +23,7 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from models import DependencyInfo, PackageRef, PackageSnapshot, Source
+from proof.policy import is_public
 
 PYPI_JSON_URL = "https://pypi.org/pypi/{name}/json"
 GITHUB_API = "https://api.github.com"
@@ -37,6 +38,7 @@ MAX_ARCHIVE_UNPACKED = 250_000_000  # sum of the sizes the headers claim
 MAX_ZIP_DIRECTORY = 8_000_000  # bytes of zip central directory
 MAX_DEP_LOOKUPS = 25
 
+_METADATA_NAMES = {"requires.txt", "PKG-INFO", "pyproject.toml", "setup.cfg"}
 _PYPI_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _GITHUB_URL_RE = re.compile(
     r"https://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?"
@@ -135,7 +137,7 @@ def parse_requirements_txt(text: str) -> list[str]:
 class Archive:
     py_files: dict[str, str]
     metadata: dict[str, str]  # packaging files that can name the dependencies
-    truncated: bool  # some .py files were left out (file count or size limits)
+    truncated: bool  # some .py files were left out (file count, size, encoding or name clashes)
 
 
 def extract_py_files(content: bytes, filename: str) -> dict[str, str]:
@@ -146,25 +148,38 @@ def extract_py_files(content: bytes, filename: str) -> dict[str, str]:
 def extract_archive(content: bytes, filename: str) -> Archive:
     """Pull .py files and dependency metadata out of an sdist/zip archive held in memory.
 
-    Nothing is written to disk. Entries with absolute or `..` paths are skipped, the
-    top-level directory is stripped, and file count/size are capped. `truncated` is True when
-    the caps dropped any .py file, so callers know the result is incomplete.
+    Nothing is written to disk. Entries with absolute or `..` paths are skipped. The top-level
+    directory is stripped only when every entry sits under the same one (an sdist); a wheel or an
+    archive with several top-level entries keeps its paths. File count and size are capped.
+    `truncated` is True when a .py file was left out (a cap, a file that is not UTF-8, or a name
+    clash), so callers know the result is incomplete.
     """
     py: list[tuple[str, Callable[[], bytes]]] = []
     meta: list[tuple[str, Callable[[], bytes]]] = []
     oversize = 0
+    tops: set[str] = set()
+    root_file = False
 
-    def classify(path: str | None, size: int, read: Callable[[], bytes]) -> None:
-        nonlocal oversize
+    def classify(raw_name: str, size: int, read: Callable[[], bytes]) -> None:
+        nonlocal oversize, root_file
+        path = _clean_member_path(raw_name)
         if not path:
             return
+        parts = path.split("/")
+        if len(parts) == 1:
+            root_file = True
+        elif len(tops) < 2:
+            tops.add(parts[0])
         if path.endswith(".py"):
             if size <= MAX_FILE_BYTES:
                 py.append((path, read))
             else:
                 oversize += 1
-        elif is_dependency_metadata(path) and size <= MAX_FILE_BYTES:
+        elif parts[-1] in _METADATA_NAMES and size <= MAX_FILE_BYTES:
             meta.append((path, read))
+
+    def finish() -> Archive:
+        return _build_archive(py, meta, oversize, strip=len(tops) == 1 and not root_file)
 
     try:
         if filename.endswith((".zip", ".whl")):
@@ -174,8 +189,8 @@ def extract_archive(content: bytes, filename: str) -> Archive:
                 for entries, zi in enumerate(zf.infolist(), start=1):
                     _check_archive_limits(entries, unpacked := unpacked + zi.file_size)
                     if not zi.is_dir():
-                        classify(_clean_member_path(zi.filename), zi.file_size, lambda zi=zi: zf.read(zi))
-                return _build_archive(py, meta, oversize)
+                        classify(zi.filename, zi.file_size, lambda zi=zi: zf.read(zi))
+                return finish()
         with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as tf:
             # Walk the headers one at a time. Each header states its size, so a hostile entry is refused
             # *before* its data is decompressed. `tf.getmembers()` would decompress and index everything.
@@ -185,9 +200,9 @@ def extract_archive(content: bytes, filename: str) -> Archive:
                 unpacked += m.size if m.isreg() else 0
                 _check_archive_limits(entries, unpacked)
                 if m.isfile():
-                    classify(_clean_member_path(m.name), m.size, lambda m=m: (tf.extractfile(m) or io.BytesIO()).read())
+                    classify(m.name, m.size, lambda m=m: (tf.extractfile(m) or io.BytesIO()).read())
                 tf.members = []  # TarFile remembers every header it reads; do not let that grow with the archive
-            return _build_archive(py, meta, oversize)
+            return finish()
     except (tarfile.TarError, zipfile.BadZipFile, EOFError, OSError) as exc:
         raise ExhumeError(
             f"The coffin is rotten: the source archive could not be opened ({exc.__class__.__name__}).",
@@ -234,10 +249,16 @@ def _build_archive(
     py: list[tuple[str, Callable[[], bytes]]],
     meta: list[tuple[str, Callable[[], bytes]]],
     oversize: int,
+    strip: bool = True,
 ) -> Archive:
-    found, capped = _read_best(py)
+    def inner(path: str) -> str:
+        return path.split("/", 1)[1] if strip and "/" in path else path
+
+    found, capped = _read_best([(inner(path), read) for path, read in py])
     metadata: dict[str, str] = {}
-    for path, read in meta:
+    for path, read in ((inner(p), r) for p, r in meta):
+        if not is_dependency_metadata(path):
+            continue
         try:
             metadata[path] = read().decode("utf-8")
         except UnicodeDecodeError:
@@ -339,12 +360,14 @@ def file_priority(path: str) -> tuple[int, str]:
 def _read_best(candidates: list[tuple[str, Callable[[], bytes]]]) -> tuple[dict[str, str], bool]:
     """Read the highest-priority candidates until MAX_PY_FILES decodable files are held.
 
-    Returns (files, capped); `capped` is True when more candidates were left unread.
+    Returns (files, capped). `capped` is True when any candidate is missing from the result: it was left
+    unread, was not valid UTF-8, or shared its path with another entry.
     """
     found: dict[str, str] = {}
     capped = False
     for path, read in sorted(candidates, key=lambda c: file_priority(c[0])):
         if path in found:
+            capped = True
             continue
         if len(found) >= MAX_PY_FILES:
             capped = True
@@ -352,7 +375,7 @@ def _read_best(candidates: list[tuple[str, Callable[[], bytes]]]) -> tuple[dict[
         try:
             found[path] = read().decode("utf-8")
         except UnicodeDecodeError:
-            continue
+            capped = True
     return dict(sorted(found.items())), capped
 
 
@@ -363,8 +386,6 @@ def _clean_member_path(name: str) -> str | None:
     parts = [p for p in normalized.split("/") if p not in ("", ".")]
     if ".." in parts or not parts:
         return None
-    if len(parts) > 1:
-        parts = parts[1:]  # strip the archive's top-level directory
     return "/".join(parts)
 
 
@@ -501,7 +522,8 @@ def exhume_github(
         headers,
     )
     _raise_for_github(tree_resp, f"{owner}/{repo}")
-    entries = _json(tree_resp, "GitHub").get("tree") or []
+    tree = _json(tree_resp, "GitHub")
+    entries = tree.get("tree") or []
 
     blobs = [e for e in entries if e.get("type") == "blob" and e.get("path")]
     all_py = [e for e in blobs if e["path"].endswith(".py")]
@@ -509,14 +531,13 @@ def exhume_github(
         (e["path"] for e in all_py if (e.get("size") or 0) <= MAX_FILE_BYTES),
         key=file_priority,
     )[:MAX_GITHUB_FILES]
-    truncated = len(py_paths) < len(all_py)
 
     def raw(path: str) -> str | None:
         resp = _get(client, f"{GITHUB_RAW}/{owner}/{repo}/{quote(branch, safe='')}/{quote(path)}", "GitHub raw")
         return resp.text if resp.status_code == 200 else None
 
     source_map = {p: t for p in py_paths if (t := raw(p)) is not None}
-    truncated = len(source_map) < len(all_py)
+    truncated = len(source_map) < len(all_py) or tree.get("truncated") is True  # GitHub cut its own listing
 
     deps: list[str] = []
     if any(e["path"] == "requirements.txt" for e in blobs):
@@ -539,7 +560,8 @@ def _raise_for_github(resp: httpx.Response, what: str) -> None:
     if resp.status_code == 404:
         raise ExhumeError(f"The grave is empty: no GitHub repository '{what}'.", 404)
     if resp.status_code in (403, 429):
-        raise ExhumeError("GitHub rate limit reached. Set GITHUB_TOKEN to raise it.", 429)
+        hint = "" if is_public(os.environ.get("CRYPT_KEEPER_PUBLIC")) else " Set GITHUB_TOKEN to raise the limit."
+        raise ExhumeError(f"GitHub rate limit reached. Try again later.{hint}", 429)
     raise ExhumeError(f"GitHub answered with status {resp.status_code}.", 502)
 
 

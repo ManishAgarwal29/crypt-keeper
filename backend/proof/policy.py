@@ -21,11 +21,15 @@ execution for the world. Only a deliberate `*` does that.
 """
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 
+from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
 UNRESTRICTED = "*"
+APPROVED_FILE = Path(__file__).with_name("approved_dependencies.json")
 
 CURATED_REASON = (
     "Proof of life on this server is limited to a curated list of packages. "
@@ -74,6 +78,65 @@ def resolve_allowlist(raw: str | None, public: bool) -> frozenset[str] | None:
 
 def is_allowed(identifier: str, allowlist: frozenset[str] | None) -> bool:
     return allowlist is None or normalize(identifier) in allowlist
+
+
+def dependency_names(deps: list[str]) -> list[str]:
+    """Canonical project names of requirement strings. A string that is not a valid requirement keeps its
+    raw text, so it can never match an approved name."""
+    names: list[str] = []
+    for raw in deps:
+        try:
+            names.append(canonicalize_name(Requirement(raw).name))
+        except InvalidRequirement:
+            names.append(raw.strip())
+    return names
+
+
+def unapproved_dependencies(identifier: str, deps: list[str], approved: dict[str, frozenset[str]]) -> list[str] | None:
+    """The dependencies of `identifier` that nobody reviewed, or None if the package has no reviewed list.
+
+    Approving a package name is not enough on a public host: the package installs its dependencies, and
+    each one runs code on import. `approved` maps a package key to the dependency names a person checked.
+    """
+    reviewed = approved.get(normalize(identifier))
+    if reviewed is None:
+        return None
+    return sorted({name for name in dependency_names(deps) if name not in reviewed})
+
+
+def parse_approved(text: str) -> dict[str, frozenset[str]]:
+    """Read the reviewed-dependency file: `{"package": {"dependencies": ["name", ...]}}`. Malformed means none."""
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    approved: dict[str, frozenset[str]] = {}
+    for key, entry in data.items():
+        names = entry.get("dependencies") if isinstance(entry, dict) else None
+        if isinstance(key, str) and isinstance(names, list) and all(isinstance(n, str) for n in names):
+            approved[normalize(key)] = frozenset(canonicalize_name(n) for n in names)
+    return approved
+
+
+def load_approved(path: Path = APPROVED_FILE) -> dict[str, frozenset[str]]:
+    try:
+        return parse_approved(path.read_text(encoding="utf-8"))
+    except OSError:
+        return {}
+
+
+def unapproved_reason(identifier: str, bad: list[str] | None) -> str:
+    if bad is None:
+        return (
+            f"Proof of life was skipped: '{identifier}' has no reviewed dependency list on this server, "
+            "so its dependencies cannot be installed. Run Crypt Keeper locally to check it."
+        )
+    return (
+        "Proof of life was skipped: these dependencies have not been reviewed for this server: "
+        f"{', '.join(bad)}. Run Crypt Keeper locally to check this package."
+    )
 
 
 def skip_reason(allowlist: frozenset[str] | None) -> str:

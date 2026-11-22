@@ -1,0 +1,80 @@
+{
+  "attrdict": {
+    "dependencies": [
+      "six"
+    ],
+    "closure": [
+      "six"
+    ],
+    "reviewed_on": "2026-11-22",
+    "skipped_non_plain_requirements": []
+  },
+  "flask-restplus": {
+    "dependencies": [
+      "aniso8601",
+      "enum34",
+      "flask",
+      "jsonschema",
+      "pytz",
+      "six"
+    ],
+    "closure": [
+      "aniso8601",
+      "attrs",
+      "blinker",
+      "click",
+      "enum34",
+      "flask",
+      "itsdangerous",
+      "jinja2",
+      "jsonschema",
+      "jsonschema-specifications",
+      "markupsafe",
+      "pytz",
+      "referencing",
+      "rpds-py",
+      "six",
+      "typing-extensions",
+      "werkzeug"
+    ],
+    "reviewed_on": "2026-11-22",
+    "skipped_non_plain_requirements": []
+  },
+  "hyper": {
+    "dependencies": [
+      "cryptography",
+      "h2",
+      "hyperframe",
+      "pyopenssl",
+      "service-identity"
+    ],
+    "closure": [
+      "attrs",
+      "cffi",
+      "cryptography",
+      "h2",
+      "hpack",
+      "hyperframe",
+      "pycparser",
+      "pyopenssl",
+      "service-identity",
+      "typing-extensions"
+    ],
+    "reviewed_on": "2026-11-22",
+    "skipped_non_plain_requirements": []
+  },
+  "unittest2": {
+    "dependencies": [
+      "argparse",
+      "six",
+      "traceback2"
+    ],
+    "closure": [
+      "argparse",
+      "six",
+      "traceback2"
+    ],
+    "reviewed_on": "2026-11-22",
+    "skipped_non_plain_requirements": []
+  }
+}

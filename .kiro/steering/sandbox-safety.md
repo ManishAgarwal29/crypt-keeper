@@ -20,8 +20,14 @@ project. Do not weaken one without replacing its protection and its test.
   containment check. Reject absolute paths, `..`, backslashes, drive letters, Windows reserved names.
 - **Environment is scrubbed.** Only the keys in `_BASE_ENV_KEYS` (plus proxy and cert keys for pip
   alone). HOME and TEMP point into the temp directory. Never forward `GITHUB_TOKEN` or similar.
-- **Every step has a timeout, and a timeout kills the whole process tree.** Output goes to a temp
-  file and only a tail is kept.
+- **Every step has a timeout, and the process tree is killed when the step ends** (timeout, output
+  or disk limit, or a normal exit), so nothing a package started outlives its step. Steps draw on one
+  total time budget (`TOTAL_BUDGET`, below the host's request timeout). Output goes to a temp file
+  and only a tail is kept; output size and the run directory are watched.
+- **Children run under resource limits** (`child_limits`, applied by the static `LIMIT_LAUNCHER`; the
+  limits and the command travel as data, never as code).
+- **Nothing server-side reaches a client.** Errors are generic, details go to the log, and the temp
+  directory, interpreter path and home directory are redacted from `error`, `output` and `import_results`.
 - **This is not a security boundary.** Do not describe it as a sandbox that makes untrusted code
   safe. Keep the docstring, README and UI footer honest about that.
 - **No secrets in the service environment.** A same-user child can read its parent's environment
@@ -32,6 +38,9 @@ project. Do not weaken one without replacing its protection and its test.
   *missing* allow-list into "no package runs". A blank allow-list means no package in any mode. Only
   an explicit `CRYPT_KEEPER_PROOF_ALLOWLIST=*` means every package. A typo in `CRYPT_KEEPER_PUBLIC`
   counts as public. Never make a missing or malformed value mean "unrestricted".
+- **A listed package is not enough: its dependencies need a review too.** On a public host with a list,
+  `_run_proof` refuses a package whose direct dependencies are not in `approved_dependencies.json`, and
+  a package with no entry. A missing or malformed file approves nothing.
 - `/proof-of-life`, which runs caller-supplied source, is refused whenever any list is in force
   (an empty list included). Never route a request-supplied package name or source to the sandbox
   without the `is_allowed` check.
@@ -45,7 +54,9 @@ project. Do not weaken one without replacing its protection and its test.
 ## Telling the truth about results
 - A run on a different Python than the target can show failure, never success: keep
   `target_python_matched` and `proof/verdict.py` strict. "Imports on 3.11" is not "works on 3.12".
-- A truncated exhumation (`snapshot.truncated`) must stay visible in the autopsy and the log.
+- A truncated exhumation (`snapshot.truncated`) must stay visible in the autopsy and the log, and a
+  failed run on truncated source is `unverified`, never dead. A file the exhumer cannot read, or that
+  shares a path with another, counts as truncation.
 - Do not turn an error into "dead" or "alive" without saying which check produced it.
 
 ## API guards (`api/guards.py`, `api/limits.py`, `api/main.py`)
@@ -62,5 +73,8 @@ project. Do not weaken one without replacing its protection and its test.
 
 ## When you change any of this
 Update or add the matching tests in `tests/test_sandbox.py`, `tests/test_proof_discovery.py`,
-`tests/test_policy.py`, `tests/test_limits.py`, `tests/test_verdict.py`, `tests/test_api.py` and
-`tests/test_exhumer.py`, then run the full suite, not just the quick one.
+`tests/test_policy.py`, `tests/test_limits.py`, `tests/test_verdict.py`, `tests/test_api.py`,
+`tests/test_exhumer.py`, `tests/test_sandbox_hardening.py`, `tests/test_sandbox_errors.py`,
+`tests/test_approved_dependencies.py` and `tests/test_exhumer_fidelity.py`, then run the full suite, not
+just the quick one. The Linux-only tests (process groups, `/proc`, rlimits) are skipped on Windows; run
+them in the container as described at the top of `tests/test_sandbox_hardening.py`.

@@ -1,8 +1,8 @@
 # How Kiro built Crypt Keeper
 
 Crypt Keeper was built in the Kiro IDE over one long session, from an empty folder to a working
-app: about 2,300 lines of backend code, 2,100 lines of tests (about 490 tests, 33 of them
-property-based), and a 770-line UI with no dependencies.
+app: about 2,700 lines of backend code, 3,000 lines of tests (about 700 tests, 41 of them
+property-based), and a 780-line UI with no dependencies.
 
 This page says what each Kiro feature did for the project, including where it did not help.
 
@@ -17,7 +17,7 @@ This page says what each Kiro feature did for the project, including where it di
 | MCP | Yes: a server, used from Kiro and by an agent |
 | Custom agents | Yes: three, two of them used on real work |
 | Skills | Yes: two |
-| Powers | Authored, not yet imported into Kiro (see below) |
+| Powers | Yes: imported from a folder, and its tool and skill used |
 | Property-based testing | Yes |
 | Kiro CLI, Kiro Web, Kiro Crew | No, so I cannot compare them with the IDE |
 
@@ -117,7 +117,8 @@ that on trust. I checked two myself:
   `Content-Length`, passed the guard.
 - *The allow-list approves a package name, not its dependencies.* **A real design risk, but not
   exploitable today.** I walked the dependency graph of the four listed packages: 15 projects,
-  all of them exist on PyPI, and only the four listed ones are abandoned.
+  all of them exist on PyPI, and only the four listed ones are abandoned. (Now partly closed, see
+  the table below.)
 
 **Four of the findings are now fixed**, each with tests that I checked by breaking the fix on
 purpose (11 deliberate breakages, all caught):
@@ -144,11 +145,33 @@ Fixing them taught three things:
   the command that stopped the server, a container start next to the image rebuild). The first
   produced a false "connection refused" that looked like a crash; I traced it before believing it.
 
-**Eight findings are still open**, none of them tested yet: a child process that survives the
-sandbox's timeout, no disk or memory limit for the child, the allow-list approving a package name
-but not its dependencies (hash-pinned lock files would fix that), server paths in sandbox error
-text, truncated or undecodable source not downgrading the verdict, the `GITHUB_TOKEN` hint,
-test paths passed to pytest without `--`, and loose worst-case time limits.
+**The other eight findings are fixed too.** I wrote the tests first and ran them against the old
+code: 20 of the 30 new sandbox tests failed, which confirmed each finding was real. Then I fixed
+them. Every fix was checked by breaking it on purpose (29 deliberate breakages, run in the Linux
+container so the Linux-only tests count).
+
+| Finding | Fix |
+|---|---|
+| A process the package starts survives the run | The process tree is killed when every step ends, not only on timeout. On Linux a per-run marker in the environment also lets the server find and kill daemons that left the process group with `setsid`. A package that both calls `setsid` and wipes its own environment can still escape; the container is the real boundary. |
+| No output, disk, file-size, memory or process limits | Output over 10 MB or a run directory over 1 GB stops the step. On Linux each child also gets limits on core dumps, file size (256 MB), process count and address space (3 GB, set with `CRYPT_KEEPER_CHILD_MEM_MB`, `0` turns it off). The limits are applied by a small fixed launcher that receives them as data. |
+| The allow-list approves a package name, not its dependencies | On a public host, each listed package has a reviewed list of dependency names in `backend/proof/approved_dependencies.json`. A dependency that is not on it, or a package with no entry, is not run. `scripts/review_dependencies.py` prints what a person has to read before writing an entry. |
+| Truncated or undecodable source does not lower the verdict | A file that is not UTF-8, or that clashes with another path, now marks the snapshot truncated, as does GitHub's own `truncated` flag. A failed run on truncated source is `unverified`, never `still_dead` or `regressed`. The top-level directory is stripped only when every entry shares it, so wheels keep their paths. |
+| Server paths and raw exceptions in error text | Errors are generic and the details go to the server log. The temp directory, the interpreter path and the home directory are replaced with `<sandbox>`, `<python>` and `~` in everything a client receives. |
+| The rate-limit message pushes `GITHUB_TOKEN` | It only mentions the token when the server is not in public mode. |
+| Test paths passed to pytest without `--` | `--` now comes before them. |
+| Loose time limit; probes on every request; unbounded exhumes | Each step gets only the time left in a 600 s budget (below the host's 900 s timeout). Interpreter lookups are cached per major.minor and never probe implausible versions. At most 8 exhumes run at once (503 when busy). |
+
+What is **not** covered, so nobody reads more into this than is there:
+- The reviewed list covers the direct dependencies. pip still resolves their dependencies at run
+  time to the latest release, so a malicious new release of a transitive dependency would be
+  installed. Hash-pinned lock files would close that and are not done.
+- The resource limits are Linux only. On Windows only the output, disk and time limits apply.
+- The Linux-only tests run in the project's container (`docker run ... python:3.12-slim`), not in
+  the normal Windows run, where they are skipped.
+- The service-account change and Cloud Run streaming are still untested, as before.
+- Two of my first tests passed against deliberately broken code (the tree kill and the per-step
+  sweep each hid behind the other one, and the implausible-target test never gave the probe
+  anything to find). The mutation run showed it, and I added tests that isolate each mechanism.
 
 **`grave-digger` triaged five packages through MCP.** Its MCP server is declared inside its own
 file, so the agent works in any clone without anyone editing `mcp.json`. I then ran Crypt Keeper
@@ -177,12 +200,25 @@ claim an impact for it.
 - [`triage-abandoned-package`](../skills/triage-abandoned-package/SKILL.md): how to read the MCP
   output with the Coroner's own thresholds.
 - **The power** is a [`plugin.json`](../plugin.json) in the Agent Plugins format, with an
-  `mcp.json` and the triage skill, at the repository root so the repository can be imported as one.
-  **I have not imported it into Kiro.** I cannot confirm that its relative server path resolves
-  after install, so treat it as authored, not proven.
+  [`mcp.json`](../mcp.json) and the triage skill, at the repository root so the repository can be
+  imported as one. It was imported with Powers panel, Add Custom Power, Import power from a folder.
+  What happened:
+  - My first `mcp.json` was **invalid**: it lacked `$schema` and `"type": "stdio"`, which the Agent
+    Plugins schema requires. I found that by reading the schema, not from my own test, which only
+    checked server names and was too loose. The test now follows the schema, and I confirmed that it
+    fails on the old file.
+  - The schema also defines `cwd: "${PLUGIN_ROOT}"`, which pins the working directory so the relative
+    server path does not depend on the open workspace.
+  - Kiro registered it as `kiroween2026`, the folder name, not the manifest's `crypt-keeper`, and
+    copied the whole repository into `~/.kiro/powers/installed/`.
+  - Calling the power's `get_pypi_metadata` tool for `attrdict` returned live data (version 2.0.1,
+    released 2019-02-01, Python 2.7 only), so the server starts from the installed copy and the path
+    resolves. The triage skill loads through the power as well.
+  - For this format Kiro runs the server itself; it does not appear in `mcp.json`.
 
-These files rot easily, so [`test_kiro_config.py`](../backend/tests/test_kiro_config.py) (38
-tests) checks them: agent and skill formats, that every resource exists and fits Kiro's limits
+These files rot easily, so [`test_kiro_config.py`](../backend/tests/test_kiro_config.py) (44
+tests) checks them: agent and skill formats, the power's manifest and MCP config against the Agent
+Plugins schemas, that the power's server starts the way its manifest says, that every resource exists and fits Kiro's limits
 (32 files, 100,000 characters), that the read-only agents really are read-only, that the necromancer's
 write and deny lists do not overlap, that the skills name symbols and tests that exist and state
 the thresholds the Coroner really uses, and that each hook matcher fires on the files it is meant
@@ -205,7 +241,7 @@ did not depend on it.
 
 ## Property-based testing
 
-33 Hypothesis properties cover the pure modules: dependency bumping and source rewriting are
+39 Hypothesis properties cover the pure modules: dependency bumping and source rewriting are
 idempotent and always produce valid output; written paths can never escape the sandbox; the
 dependency validator never lets a pip option or URL through; discovery never raises on any
 input; the verdict can say "resurrected" only for dead-then-alive on the target Python. The
@@ -231,6 +267,10 @@ properties did not:
 8. A fail-open flag in my own fix for the allow-list (caught by the safety hook).
 9. A 413 that FastAPI reported as a 400, because of how `BaseHTTPMiddleware` wraps errors (caught
    by a failing test of the fix).
+10. A power manifest (`mcp.json`) that broke the Agent Plugins schema, which my own test had passed
+    (found by reading the schema while importing the power).
+
+
 
 So the habit that paid off was: after each task, run the thing on real input, then turn what
 broke into a test.
@@ -248,9 +288,8 @@ On Python 3.12.10, with the check run on the target Python itself:
 
 ## Limits and what I would do next
 
-- Fix the auditor's eight remaining findings, starting with the process that survives the sandbox's
-  timeout and the missing disk and memory limits.
+- Pin the transitive dependencies of the listed packages by hash.
 - Run proof of life in a container with real isolation. The current sandbox is not a security boundary.
-- Import the power into Kiro and use the `necromancer` agent on a real change.
+- Use the `necromancer` agent on a real change, and try the CLI, Web and Crew, none of which I have used.
 - Convert Python 2 source. Today it is reported, not converted.
 - Handle data files and C extensions, which the exhumer skips.

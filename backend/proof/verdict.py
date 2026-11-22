@@ -4,11 +4,12 @@ from __future__ import annotations
 from models import ProofOfLife, Verdict
 
 
-def judge(before: ProofOfLife | None, after: ProofOfLife | None) -> tuple[Verdict, str]:
+def judge(before: ProofOfLife | None, after: ProofOfLife | None, truncated: bool = False) -> tuple[Verdict, str]:
     """Compare the original package's proof of life with the revived package's.
 
     A run on a different Python than the target can show failure but never success, because a
-    package that imports on 3.11 may still be dead on 3.12.
+    package that imports on 3.11 may still be dead on 3.12. Likewise, when the exhumed source was
+    `truncated`, a failure may only mean files are missing, so it is never reported as dead.
     """
     if after is None or after.skipped:
         return "unverified", (after.error if after is not None and after.error else "Proof of life was not run.")
@@ -33,6 +34,11 @@ def judge(before: ProofOfLife | None, after: ProofOfLife | None) -> tuple[Verdic
             )
         return "already_alive", "The package already worked; revival changed nothing measurable."
 
+    if truncated:
+        return "unverified", (
+            "The revived package failed, but the exhumed source was incomplete (some files were left out), "
+            f"so this may not be the package's fault: {_short(after.error)}"
+        )
     if before_ran and before.imported:
         return "regressed", f"The original imported but the revived package does not: {_short(after.error)}"
     return "still_dead", f"Revival did not bring it back: {_short(after.error)}"

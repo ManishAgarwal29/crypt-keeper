@@ -95,3 +95,25 @@ def test_a_resurrection_requires_dead_before_alive_after_on_the_target_python(be
         assert not before.imported and not before.skipped
         assert after.imported and not after.skipped
         assert after.python_used is None or after.target_python_matched
+
+
+# --- a truncated exhumation cannot prove the package dead ---------------------------------------------------
+
+
+@pytest.mark.parametrize("before", [None, pol(True, 3), pol(False)])
+def test_a_failure_on_truncated_source_is_unverified_never_dead_or_regressed(before):
+    verdict, reason = judge(before, pol(False, error="ImportError: no module named x"), truncated=True)
+    assert verdict == "unverified" and "incomplete" in reason and "ImportError" in reason
+
+
+def test_a_failure_on_complete_source_is_still_dead_or_regressed():
+    assert judge(pol(False), pol(False), truncated=False)[0] == "still_dead"
+    assert judge(pol(True, 1), pol(False), truncated=False)[0] == "regressed"
+
+
+def test_truncation_does_not_hide_a_success_that_was_actually_shown():
+    assert judge(pol(False), pol(True, 4), truncated=True)[0] == "resurrected"
+
+
+def test_truncation_never_upgrades_a_wrong_python_run():
+    assert judge(pol(True), pol(True, matched=False), truncated=True)[0] == "unverified"
