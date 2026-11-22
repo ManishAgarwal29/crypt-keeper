@@ -487,9 +487,12 @@ async function refreshPythonHint() {
     if (!response.ok) return;
     const status = await response.json();
     if (pythonSelect.value !== target) return;
-    const limit = status.limited_to
-      ? ` On this server it is limited to: ${status.limited_to.join(", ")}. Any other package gets the autopsy and revival, without a verdict. Run Crypt Keeper locally to check any package.`
-      : "";
+    let limit = "";
+    if (Array.isArray(status.limited_to)) {
+      limit = status.limited_to.length === 0
+        ? " No package is enabled for proof of life on this server, so every verdict will read unverified. Run Crypt Keeper locally to check a package."
+        : ` On this server it is limited to: ${status.limited_to.join(", ")}. Any other package gets the autopsy and revival, without a verdict. Run Crypt Keeper locally to check any package.`;
+    }
     pythonHint.textContent = (!status.enabled
       ? "Proof of life is switched off on this server, so verdicts will read unverified."
       : status.target_python_matched

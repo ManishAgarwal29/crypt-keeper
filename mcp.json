@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "crypt-keeper": {
+      "command": "python",
+      "args": ["mcp-server/server.py"],
+      "env": { "FASTMCP_LOG_LEVEL": "ERROR" }
+    }
+  }
+}

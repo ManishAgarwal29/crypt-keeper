@@ -12,31 +12,55 @@ code, so the public image only runs packages from a **curated list**:
   names the only packages the server will execute.
 - Any other package still gets the live exhume, autopsy, revival and diffs. None of that executes
   anything. The verdict reads `unverified` and says why.
-- `/proof-of-life`, which runs source the caller posts, returns 403 while a list is set.
+- `/proof-of-life`, which runs source the caller posts, returns 403 while any list is in force.
 
-Do not add a package to the list unless you have looked at it. The code that runs is the latest
-PyPI release of each listed package.
+**Every ambiguous setting fails closed.** The image sets `CRYPT_KEEPER_PUBLIC=1`. With it, a *missing*
+allow-list means no package runs, and a blank one means none in any mode. So deleting the variable by
+mistake, or a quoting slip that leaves it empty, switches execution off instead of on. Running every
+package takes an explicit `CRYPT_KEEPER_PROOF_ALLOWLIST=*`, which this image never sets. Do not set it
+on a public service. Any unrecognised value of `CRYPT_KEEPER_PUBLIC` also counts as public.
+
+Do not add a package to the list unless you have looked at it, and its dependencies. The code that runs
+is the latest PyPI release of each listed package and of everything it depends on. A review of the
+four listed packages found 15 projects in that dependency graph, all currently on PyPI and all but the
+four listed ones maintained; nothing pins them, so a future malicious release of any of them would be
+installed. Hash-pinned lock files would close that and are not done.
 
 Other things to know:
 
+- **Use a service account with no permissions** (the steps below). Code in the container can ask the
+  cloud metadata server for the runtime service account's token. By default Cloud Run uses the Compute
+  Engine default account, which in many projects holds broad roles. With a dedicated account that has
+  no roles, a stolen token can do almost nothing.
 - **No secrets in the service environment.** On Linux a child process running as the same user can
   read its parent's environment through `/proc`. The sandbox scrubs the child's own environment,
   not that. Do not set tokens on this service.
 - The container has outbound internet access (the sandbox needs it for `pip`).
 - Turn execution off completely with `CRYPT_KEEPER_PROOF_OF_LIFE=off`.
-- There is no per-IP rate limit. Cost and load are bounded only by `--max-instances` and the slot
-  limit (`CRYPT_KEEPER_MAX_PROOFS`). A small archive can expand a lot while it is scanned. Both are
-  acceptable for a demo and worth fixing before a real launch.
+- **Hostile uploads are bounded.** Request bodies are limited by the bytes actually received (a chunked
+  request has no `Content-Length`), and an archive is refused before it is unpacked if it has more than
+  20,000 entries or claims more than 250 MB, on top of the 20 MB download cap.
+- **Not done:** a per-IP rate limit (cost and load are bounded by `--max-instances` and the slot limit
+  `CRYPT_KEEPER_MAX_PROOFS`), disk and memory limits on the sandboxed child, and running the child as a
+  different user from the app. All acceptable for a short demo and worth doing before a real launch.
 
 ## What was and was not tested
 
-Tested here, on the real image (built from this `Dockerfile`, 182 MB, Python 3.12 inside):
+Tested here, on the real image (rebuilt from this `Dockerfile` after the safety fixes, Python 3.12 inside):
 
 - the image builds and starts, and the UI loads from it
-- `scripts/smoke_test.py` passes all 11 checks against it: health, Python 3.12 present, a full
-  streamed `attrdict` run (`resurrected` in about 8 s), progress events arriving one by one, an
+- `scripts/smoke_test.py` passes all its checks against it: health, Python 3.12 present, a full
+  streamed `attrdict` run (`resurrected`, 8 to 16 s in my runs), progress events arriving one by one, an
   unlisted package (`docopt`) getting an autopsy but **no execution**, and a posted-source request
   refused with 403
+- **the deploy mistake the fail-closed rule is for:** a container started with a *blank*
+  `CRYPT_KEEPER_PROOF_ALLOWLIST`. Nothing executed, the verdict said why, and posted source got 403.
+  The same result with the variable removed entirely, on a local server with `CRYPT_KEEPER_PUBLIC=1`
+- a real `uvicorn` server over a socket: a chunked body over the 25 MB limit gets 413 (and a 1 MB one
+  gets through to normal validation), a declared 100 MB body gets 413, and malformed or conflicting
+  `Content-Length` headers get 400. The server survived all of it
+- the archive caps against real packages. The largest source archive I tried (`django`) has 10,312
+  entries and 47 MB unpacked, `sqlalchemy` has 69 MB unpacked; the caps are 20,000 entries and 250 MB
 - the proxy and host rules, using the headers a platform sends: https origin with
   `X-Forwarded-Proto: https` is accepted; a missing header, an http page against an https site, a
   foreign origin and an unknown Host are refused; a `*.run.app` host is accepted
@@ -44,7 +68,9 @@ Tested here, on the real image (built from this `Dockerfile`, 182 MB, Python 3.1
 
 **Not tested** (no `gcloud` or `flyctl` here, and no cloud account):
 
-- the deploy commands below, which are written from the Cloud Run documentation
+- the deploy commands below, including the service-account steps, which are written from the Cloud
+  Run documentation
+- how Cloud Run's own front end treats very large or chunked requests (our limit is 25 MB)
 - streaming through Cloud Run's front end. It is reported to work for chunked responses without
   special settings, but I have not seen it. If it buffers, the UI still works, but the progress
   list jumps to done at the end.
@@ -58,14 +84,29 @@ You need a Google account, a project with billing enabled, and the
 [gcloud CLI](https://cloud.google.com/sdk/docs/install). New customers get free credit, and Cloud Run
 scales to zero when idle.
 
+**1. Create a runtime service account with no roles.** Do not skip this: it is what limits the damage
+if code in the container asks the metadata server for credentials.
+
 ```powershell
 gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
 
+gcloud iam service-accounts create crypt-keeper-run `
+  --display-name "Crypt Keeper runtime (no roles)"
+```
+
+Do not grant this account any role. If a later step fails with `iam.serviceaccounts.actAs`, grant
+*yourself* the Service Account User role on this one service account. That is a permission for you to
+attach it, not a permission for the account.
+
+**2. Deploy with it.**
+
+```powershell
 # from the repository root (where the Dockerfile is)
 gcloud run deploy crypt-keeper `
   --source . `
   --region us-central1 `
+  --service-account crypt-keeper-run@YOUR_PROJECT_ID.iam.gserviceaccount.com `
   --allow-unauthenticated `
   --cpu 2 --memory 2Gi `
   --timeout 900 `
@@ -75,7 +116,21 @@ gcloud run deploy crypt-keeper `
 
 The first run asks to enable the Cloud Build, Artifact Registry and Cloud Run APIs and to create a
 repository. Answer yes. It builds the image remotely, so you do not need Docker. When it finishes it
-prints the **Service URL**. Then check it:
+prints the **Service URL**.
+
+**3. Check the account and the roles.** Both commands should show what is written here:
+
+```powershell
+# prints crypt-keeper-run@YOUR_PROJECT_ID.iam.gserviceaccount.com
+gcloud run services describe crypt-keeper --region us-central1 `
+  --format "value(spec.template.spec.serviceAccountName)"
+
+# prints nothing: the account holds no roles on the project
+gcloud projects get-iam-policy YOUR_PROJECT_ID --flatten "bindings[].members" `
+  --filter "bindings.members:crypt-keeper-run@" --format "table(bindings.role)"
+```
+
+**4. Check the app:**
 
 ```powershell
 python scripts/smoke_test.py https://YOUR-SERVICE-URL
@@ -98,7 +153,8 @@ bills continuously, so check the price and remove it afterwards.
 
 | Variable | Default in the image | Meaning |
 |---|---|---|
-| `CRYPT_KEEPER_PROOF_ALLOWLIST` | `attrdict,hyper,unittest2,flask-restplus` | Packages that may be executed. Empty means all (local use only). |
+| `CRYPT_KEEPER_PUBLIC` | `1` | Public-host mode: a missing allow-list means *no* package runs. Leave it on. |
+| `CRYPT_KEEPER_PROOF_ALLOWLIST` | `attrdict,hyper,unittest2,flask-restplus` | Packages that may be executed. Blank means none. `*` alone means every package (never on a public host). |
 | `CRYPT_KEEPER_PROOF_OF_LIFE` | on | `off` disables execution entirely. |
 | `CRYPT_KEEPER_ALLOWED_HOSTS` | `*.run.app,*.fly.dev,localhost,127.0.0.1` | Host headers accepted. Add a custom domain here. |
 | `CRYPT_KEEPER_ALLOWED_ORIGINS` | local dev origins | Extra browser origins allowed to POST. The site's own origin is always allowed. |
@@ -122,6 +178,8 @@ gcloud run services update crypt-keeper --region us-central1 --update-env-vars C
 | Stages do not tick; everything appears at the end | The response is being buffered. The result is still correct. |
 | A run fails or the instance restarts | Out of memory. Raise `--memory` or lower `--concurrency`. |
 | `503 The crypt is busy` | All sandbox slots are in use. Wait, or raise `CRYPT_KEEPER_MAX_PROOFS` and memory together. |
+| Every verdict reads "Proof of life is not enabled for any package" | The allow-list is missing or blank, and the service is failing closed on purpose. Set `CRYPT_KEEPER_PROOF_ALLOWLIST` again (see the command above). |
+| `413 ... too large to exhume` | The package's source archive is over a limit (20 MB download, 20,000 entries or 250 MB unpacked). It is refused whole, not partly analysed. |
 | GitHub repositories fail with "rate limit" | Unauthenticated GitHub allows few requests per hour. The curated demo needs only PyPI. |
 
 ## Fly.io (alternative, not tested)
@@ -142,7 +200,8 @@ python scripts/smoke_test.py http://127.0.0.1:8080
 ## Not done
 
 - A recorded-run fallback (replaying saved results if the live host is down).
-- Per-IP rate limiting and a decompression cap.
+- Per-IP rate limiting, disk and memory limits for the sandboxed child, and running it as a separate user.
+- Hash-pinned dependencies for the listed packages.
 - Running arbitrary packages safely for the public. That needs real isolation per run, such as
   [Cloud Run sandboxes](https://docs.cloud.google.com/run/docs/code-execution) (Preview) or a remote
   sandbox service, and is a larger change than this demo needs.

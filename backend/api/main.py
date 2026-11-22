@@ -27,6 +27,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from api.exhumer import ExhumeError, exhume
+from api.guards import RequestGuardMiddleware
+from api.limits import BodyLimitMiddleware
 from api.sandbox import find_interpreter, proof_enabled, run_proof_of_life
 from coroner.autopsy import run_autopsy
 from models import (
@@ -40,7 +42,7 @@ from models import (
     ReviveResponse,
 )
 from necromancer.revive import revive, revived_snapshot
-from proof.policy import CURATED_REASON, is_allowed, parse_allowlist
+from proof.policy import is_allowed, is_public, resolve_allowlist, skip_reason
 from proof.verdict import judge
 
 log = logging.getLogger("crypt_keeper")
@@ -62,7 +64,8 @@ ALLOWED_HOSTS = _csv_env("CRYPT_KEEPER_ALLOWED_HOSTS", "127.0.0.1,localhost,test
 
 app = FastAPI(title="Crypt Keeper", description="Revive the dead. One package at a time.")
 
-# Middleware runs last-added-first: TrustedHost, then the request guard, then CORS.
+# Middleware runs last-added-first: body limit, TrustedHost, the request guard, then CORS.
+# The order matters: nothing is read from a request until it has passed the limit and the host check.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -71,30 +74,13 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def request_guard(request: Request, call_next):
-    """Refuse requests that a page on another site could send to a code-running endpoint."""
-    if request.method not in ("GET", "HEAD", "OPTIONS"):
-        origin = request.headers.get("origin")
-        host = request.headers.get("host", "")
-        # Behind a proxy that terminates TLS the app sees plain http while the browser's Origin is
-        # https, so take the scheme from X-Forwarded-Proto when it is a valid value. The scheme
-        # stays part of the comparison: an http page must not pass as same-origin for an https API.
-        forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
-        scheme = forwarded if forwarded in ("http", "https") else request.url.scheme
-        same_origin = bool(host) and origin == f"{scheme}://{host}"
-        if origin is not None and not same_origin and origin not in ALLOWED_ORIGINS:
-            return JSONResponse(
-                {"detail": "The crypt does not open for strangers: origin not allowed."}, status_code=403
-            )
-        if not request.headers.get("content-type", "").lower().startswith("application/json"):
-            return JSONResponse({"detail": "Send application/json."}, status_code=415)
-        if int(request.headers.get("content-length") or 0) > MAX_BODY_BYTES:
-            return JSONResponse({"detail": "The offering is too large for the crypt."}, status_code=413)
-    return await call_next(request)
-
-
+# Origin and content-type checks for state-changing requests (api/guards.py). Plain ASGI on purpose:
+# a BaseHTTPMiddleware here would wrap the body limit's 413 in an ExceptionGroup.
+app.add_middleware(RequestGuardMiddleware, allowed_origins=lambda: ALLOWED_ORIGINS)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+# Outermost, so an oversized body is refused before anything else looks at it. It counts the bytes
+# actually received (a chunked request has no Content-Length), see api/limits.py.
+app.add_middleware(BodyLimitMiddleware, max_bytes=lambda: MAX_BODY_BYTES)
 
 
 @app.exception_handler(ExhumeError)
@@ -109,8 +95,14 @@ async def handle_unexpected(_: Request, exc: Exception) -> JSONResponse:
 
 
 def proof_allowlist() -> frozenset[str] | None:
-    """Read each time so it can be changed without a restart in tests; None means unrestricted."""
-    return parse_allowlist(os.environ.get("CRYPT_KEEPER_PROOF_ALLOWLIST"))
+    """The packages that may be executed; None means no restriction (see proof/policy.py).
+
+    Read on every call so a change takes effect without a restart. Every ambiguous setting
+    resolves to "nothing may run", never to "anything may run".
+    """
+    return resolve_allowlist(
+        os.environ.get("CRYPT_KEEPER_PROOF_ALLOWLIST"), is_public(os.environ.get("CRYPT_KEEPER_PUBLIC"))
+    )
 
 
 def _http_client() -> httpx.Client:
@@ -259,11 +251,13 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
     yield done("revive", t, f"{len(revival.diffs)} files changed")
 
     before = after = None
-    if req.run_proof_of_life and not is_allowed(req.ref.identifier, proof_allowlist()):
-        # Not a curated package: report everything that needs no execution, and say why there is no verdict.
-        after = ProofOfLife(imported=False, skipped=True, error=CURATED_REASON)
+    allowlist = proof_allowlist()
+    if req.run_proof_of_life and not is_allowed(req.ref.identifier, allowlist):
+        # Not an approved package: report everything that needs no execution, and say why there is no verdict.
+        after = ProofOfLife(imported=False, skipped=True, error=skip_reason(allowlist))
+        detail = "not on the curated list" if allowlist else "not enabled on this server"
         for stage in ("proof_before", "proof_after"):
-            yield {"event": "stage", "stage": stage, "status": "skipped", "detail": "not on the curated list"}
+            yield {"event": "stage", "stage": stage, "status": "skipped", "detail": detail}
     elif req.run_proof_of_life:
         revived = revived_snapshot(snapshot, revival)
         t = time.perf_counter()

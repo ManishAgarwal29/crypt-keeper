@@ -31,7 +31,10 @@ GITHUB_RAW = "https://raw.githubusercontent.com"
 MAX_PY_FILES = 1500
 MAX_GITHUB_FILES = 200  # GitHub files cost one request each
 MAX_FILE_BYTES = 200_000
-MAX_ARCHIVE_BYTES = 20_000_000
+MAX_ARCHIVE_BYTES = 20_000_000  # compressed download
+MAX_ARCHIVE_ENTRIES = 20_000  # headers in one archive
+MAX_ARCHIVE_UNPACKED = 250_000_000  # sum of the sizes the headers claim
+MAX_ZIP_DIRECTORY = 8_000_000  # bytes of zip central directory
 MAX_DEP_LOOKUPS = 25
 
 _PYPI_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -165,21 +168,66 @@ def extract_archive(content: bytes, filename: str) -> Archive:
 
     try:
         if filename.endswith((".zip", ".whl")):
+            _check_zip_directory(content)  # before ZipFile parses (and allocates for) every entry
             with zipfile.ZipFile(io.BytesIO(content)) as zf:
-                for zi in zf.infolist():
+                unpacked = 0
+                for entries, zi in enumerate(zf.infolist(), start=1):
+                    _check_archive_limits(entries, unpacked := unpacked + zi.file_size)
                     if not zi.is_dir():
                         classify(_clean_member_path(zi.filename), zi.file_size, lambda zi=zi: zf.read(zi))
                 return _build_archive(py, meta, oversize)
         with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as tf:
-            for m in tf.getmembers():
+            # Walk the headers one at a time. Each header states its size, so a hostile entry is refused
+            # *before* its data is decompressed. `tf.getmembers()` would decompress and index everything.
+            entries = unpacked = 0
+            while (m := tf.next()) is not None:
+                entries += 1
+                unpacked += m.size if m.isreg() else 0
+                _check_archive_limits(entries, unpacked)
                 if m.isfile():
                     classify(_clean_member_path(m.name), m.size, lambda m=m: (tf.extractfile(m) or io.BytesIO()).read())
+                tf.members = []  # TarFile remembers every header it reads; do not let that grow with the archive
             return _build_archive(py, meta, oversize)
     except (tarfile.TarError, zipfile.BadZipFile, EOFError, OSError) as exc:
         raise ExhumeError(
             f"The coffin is rotten: the source archive could not be opened ({exc.__class__.__name__}).",
             422,
         ) from exc
+
+
+def _too_big(what: str) -> ExhumeError:
+    return ExhumeError(f"The corpse is too large to exhume ({what}).", 413)
+
+
+def _check_archive_limits(entries: int, unpacked: int) -> None:
+    """Refuse an archive that is a decompression bomb. The compressed-size cap alone does not stop one:
+    a few megabytes can hold millions of empty entries, or one file that expands to gigabytes."""
+    if entries > MAX_ARCHIVE_ENTRIES:
+        raise _too_big(f"more than {MAX_ARCHIVE_ENTRIES:,} entries")
+    if unpacked > MAX_ARCHIVE_UNPACKED:
+        raise _too_big(f"more than {MAX_ARCHIVE_UNPACKED // 1_000_000} MB unpacked")
+
+
+def zip_directory_summary(content: bytes) -> tuple[int, int] | None:
+    """(entry count, central directory size) from the zip's end-of-central-directory record, or None.
+
+    Read straight from the last bytes, before `zipfile` builds an object for every entry. A count of
+    0xFFFF means "see the zip64 record" and is far above our limit anyway.
+    """
+    tail = content[-(65_535 + 22):]
+    i = tail.rfind(b"PK\x05\x06")
+    if i < 0 or len(tail) - i < 22:
+        return None
+    return int.from_bytes(tail[i + 10:i + 12], "little"), int.from_bytes(tail[i + 12:i + 16], "little")
+
+
+def _check_zip_directory(content: bytes) -> None:
+    summary = zip_directory_summary(content)
+    if summary is not None:
+        count, directory_bytes = summary
+        _check_archive_limits(count, 0)
+        if directory_bytes > MAX_ZIP_DIRECTORY:
+            raise _too_big("zip directory too large")
 
 
 def _build_archive(

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "crypt-keeper",
+  "version": "0.1.0",
+  "description": "Triage abandoned Python packages: look up PyPI or GitHub metadata, apply Crypt Keeper's age and Python-support rules, and predict which are worth reviving. Reads metadata only and never runs package code.",
+  "author": {
+    "name": "Manish Agarwal"
+  },
+  "homepage": "https://github.com/ManishAgarwal29/crypt-keeper",
+  "repository": "https://github.com/ManishAgarwal29/crypt-keeper",
+  "license": "MIT",
+  "keywords": [
+    "python",
+    "pypi",
+    "abandoned-package",
+    "unmaintained",
+    "dependency",
+    "deprecated-api",
+    "python-upgrade",
+    "revive"
+  ]
+}

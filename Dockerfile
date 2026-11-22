@@ -25,7 +25,12 @@ WORKDIR /app/backend
 # Hosts the app accepts (Starlette wildcard patterns). Add your own domain with
 # CRYPT_KEEPER_ALLOWED_HOSTS at deploy time. The curated list is what stops strangers from
 # making the server execute arbitrary packages.
-ENV CRYPT_KEEPER_ALLOWED_HOSTS="*.run.app,*.fly.dev,localhost,127.0.0.1" \
+#
+# CRYPT_KEEPER_PUBLIC=1 makes every ambiguous setting fail closed: if the allow-list variable is
+# ever removed or blanked by a deploy mistake, NO package is executed. Running every package needs
+# an explicit CRYPT_KEEPER_PROOF_ALLOWLIST=*, which this image never sets.
+ENV CRYPT_KEEPER_PUBLIC=1 \
+    CRYPT_KEEPER_ALLOWED_HOSTS="*.run.app,*.fly.dev,localhost,127.0.0.1" \
     CRYPT_KEEPER_PROOF_ALLOWLIST="attrdict,hyper,unittest2,flask-restplus" \
     CRYPT_KEEPER_MAX_PROOFS=4
 
