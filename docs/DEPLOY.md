@@ -203,6 +203,44 @@ gcloud run services update crypt-keeper --region us-central1 --update-env-vars C
 | `413 ... too large to exhume` | The package's source archive is over a limit (20 MB download, 20,000 entries or 250 MB unpacked). It is refused whole, not partly analysed. |
 | GitHub repositories fail with "rate limit" | Unauthenticated GitHub allows few requests per hour. The curated demo needs only PyPI. |
 
+## Azure Container Apps (tested)
+
+Deployed and checked with `scripts/smoke_test.py` for `attrdict` and `hyper`: all checks pass, progress
+streams as separate events, and an unlisted package is not executed. Not tested: behaviour of runs longer
+than the ingress timeout (240 s by default), which the listed packages never reach (10 to 20 s).
+
+`az containerapp up --source .` crashed on Windows with `'charmap' codec can't encode characters`: the CLI
+streams the build log through a console that cannot print some of its characters. Forcing UTF-8 did not
+help. Build without streaming the log instead:
+
+```powershell
+az group create -n crypt-keeper-rg -l eastus2
+az containerapp env create -n crypt-keeper-env -g crypt-keeper-rg -l eastus2
+az acr create -n <uniqueregistryname> -g crypt-keeper-rg --sku Basic
+az acr build -r <uniqueregistryname> -t crypt-keeper:v1 --no-logs .      # prints a run ID, e.g. ch3
+az acr task show-run -r <uniqueregistryname> --run-id ch3 --query status -o tsv   # repeat until Succeeded
+
+az acr update -n <uniqueregistryname> --admin-enabled true
+$u = az acr credential show -n <uniqueregistryname> --query username -o tsv
+$p = az acr credential show -n <uniqueregistryname> --query "passwords[0].value" -o tsv
+az containerapp create -n crypt-keeper -g crypt-keeper-rg --environment crypt-keeper-env `
+  --image <uniqueregistryname>.azurecr.io/crypt-keeper:v1 `
+  --registry-server <uniqueregistryname>.azurecr.io --registry-username $u --registry-password $p `
+  --ingress external --target-port 8080 --cpu 1 --memory 2Gi --min-replicas 0 --max-replicas 2 `
+  --env-vars "CRYPT_KEEPER_ALLOWED_HOSTS=*.azurecontainerapps.io,localhost,127.0.0.1"
+python scripts/smoke_test.py https://<fqdn printed by the last command>
+```
+
+Notes:
+- The app has **no managed identity** (`identity: None`), so code in the container has no cloud token to
+  ask for. Do not add one. The registry pull uses the registry's admin credentials, kept as an app secret.
+- `CRYPT_KEEPER_ALLOWED_HOSTS` must include `*.azurecontainerapps.io`, or every request is a 400.
+- `--min-replicas 0` costs nothing when idle; the first request after a pause is slow.
+- The registry (Basic SKU) has a small fixed monthly cost. To remove everything:
+  `az group delete -n crypt-keeper-rg`.
+- To ship a new version: `az acr build ... -t crypt-keeper:v2 --no-logs .`, wait for it, then
+  `az containerapp update -n crypt-keeper -g crypt-keeper-rg --image <registry>.azurecr.io/crypt-keeper:v2`.
+
 ## Fly.io (alternative, not tested)
 
 Fly builds the same `Dockerfile`. Roughly: install `flyctl`, run `fly launch --no-deploy` in the
