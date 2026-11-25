@@ -134,9 +134,28 @@ def test_disabled_by_environment(monkeypatch):
     assert not r.imported and "disabled" in r.error
 
 
-def test_nothing_to_import_is_reported():
+def test_nothing_to_import_is_reported_as_nothing_to_run_not_as_dead():
     r = run_proof_of_life(snap({"README.md": "hi", "setup.py": ""}), CURRENT)
-    assert not r.imported and "No importable" in r.error
+    assert not r.imported and r.skipped and "No importable" in r.error and "nothing to run" in r.error
+
+
+def test_a_placeholder_distribution_is_recognised_and_names_what_it_installs():
+    s = snap({"setup.py": "from setuptools import setup\nsetup()\n", "docs/conf.py": "x = 1\n"}).model_copy(update={"dependencies": ["parameterized>=0.7", "six"]})
+    r = run_proof_of_life(s, CURRENT)
+    assert r.skipped and "placeholder" in r.error and "parameterized>=0.7" in r.error
+
+
+def test_no_placeholder_hint_when_there_is_real_source_that_just_has_no_package():
+    r = run_proof_of_life(snap({"notes/readme.py": "x = 1\n"}).model_copy(update={"dependencies": ["six"]}), CURRENT)
+    assert r.skipped and "placeholder" not in r.error
+
+
+def test_a_placeholder_gets_an_unverified_verdict_not_a_dead_one():
+    from proof.verdict import judge
+
+    skipped = run_proof_of_life(snap({"setup.py": ""}), CURRENT)
+    verdict, reason = judge(skipped, skipped)
+    assert verdict == "unverified" and "nothing to run" in reason
 
 
 def test_unsafe_paths_are_refused_before_anything_runs():

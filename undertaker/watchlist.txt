@@ -1,0 +1,17 @@
+# Abandoned PyPI packages the Undertaker re-checks. One name per line; # starts a comment.
+# Add a package here to watch it. Remove it and it is forgotten (its state is dropped).
+# Each one's latest release is older than 2021 (checked against PyPI; the benchmark applies the same rule).
+attrdict
+hyper
+unittest2
+flask-restplus
+pep8
+suds-jurko
+Flask-Script
+Flask-Cache
+xlwt
+fudge
+mox
+python-gflags
+args
+BeautifulSoup

@@ -1,0 +1,67 @@
+# Third benchmark set, written AFTER the setuptools, getargspec and placeholder changes and BEFORE running them.
+#
+# Why a third list: the 40 packages in packages-fresh.txt are where those changes came from (I read their failures), so
+# a result on them is a development result. These were never run, and were picked from memory as "old packages in
+# families not used before" (Pyramid and Pylons era, nose plugins, old Flask extensions, document-store clients, file
+# format libraries), without looking at their code or at how the tool does on them.
+# The same written rule applies: latest release before 2021-01-01, an sdist exists, at most 42 taken in this order.
+# Whatever the rule excludes is recorded, and the result is reported whatever it is.
+#
+# group  name
+held-out  WebHelpers
+held-out  repoze.who
+held-out  repoze.what
+held-out  repoze.tm2
+held-out  zope.sqlalchemy
+held-out  pyfits
+held-out  pygooglechart
+held-out  pytest-pep8
+held-out  pytest-flakes
+held-out  pytest-capturelog
+held-out  nose-testconfig
+held-out  nose-timer
+held-out  nose-ignore-docstring
+held-out  webapp2
+held-out  bottle-sqlite
+held-out  web.py
+held-out  WebError
+held-out  Pylons
+held-out  Flask-Security
+held-out  Flask-Triangle
+held-out  Flask-Autodoc
+held-out  flask-peewee
+held-out  Flask-MongoAlchemy
+held-out  Flask-Scrypt
+held-out  Flask-Classy
+held-out  mongokit
+held-out  mongoalchemy
+held-out  minimongo
+held-out  pycassa
+held-out  couchdbkit
+held-out  CouchDB
+held-out  txamqp
+held-out  dnspython3
+held-out  pydns
+held-out  passlib
+held-out  python-social-auth
+held-out  unicodecsv
+held-out  xlutils
+held-out  pyexcelerator
+held-out  pdfminer
+held-out  pdfrw
+held-out  pygeoip
+held-out  ipcalc
+held-out  isodate
+held-out  iso8601
+held-out  simplekml
+held-out  pyramid_beaker
+held-out  twill
+held-out  ClientForm
+held-out  grequests
+held-out  requests-oauth
+held-out  oauth
+held-out  python-oauth2
+held-out  pysftp
+held-out  jsonrpc2
+held-out  nosexcover2
+held-out  scikits.timeseries

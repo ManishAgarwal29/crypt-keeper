@@ -51,6 +51,24 @@ project. Do not weaken one without replacing its protection and its test.
   `MAX_ARCHIVE_UNPACKED`), because the compressed-size cap alone does not stop a decompression bomb.
   An archive over a cap is refused with 413, not partly analysed.
 
+## Reading and writing source files
+- **Metadata is read, never run.** `install_requires` comes from `setup.py` through `ast` (`install_requires_from_setup_py`),
+  never by importing or executing it. Anything computed is ignored, not guessed.
+- **Source is decoded and encoded by its own `# coding:` line** (`decode_source`, `encode_source`). The codec name is limited to
+  letters, digits, `_` and `-`, so a hostile file cannot make the codec registry import an arbitrary module. A file that does not
+  decode marks the snapshot truncated.
+- **A revival can add a dependency, and the public host must have reviewed it.** `declare_setuptools` adds `setuptools` or
+  `setuptools<81` for code that imports `pkg_resources`, `distutils` or `setuptools`. The server runs the revived package, so that
+  name has to be in `approved_dependencies.json` or the run is refused. `scripts/review_dependencies.py` reviews both the declared
+  and the revival-added names; run it whenever a listed package or the revival rules change, and check the four listed packages
+  still run in public mode (`scripts/smoke_test.py`).
+- **A rewrite must mean the same, or it stays manual.** `inspect.getargspec` is rewritten only for shapes proven equivalent
+  (the four-field unpack, field access, indexes 0 to 3); an unprovable use is reported, never guessed. A rewrite is tested by running
+  the rewritten code, not only by comparing text.
+- **The export (`POST /revive/export`) executes nothing.** It goes through `_exhume` (so the exhume slot limit applies), the same Origin and
+  content-type guards as every POST, and builds the zip in memory from paths that passed `safe_relative_path`. The download name is
+  sanitised before it reaches a header.
+
 ## Telling the truth about results
 - A run on a different Python than the target can show failure, never success: keep
   `target_python_matched` and `proof/verdict.py` strict. "Imports on 3.11" is not "works on 3.12".

@@ -1,0 +1,72 @@
+# Second benchmark set, written AFTER the first run and AFTER the two bugs it exposed were fixed
+# (source files with a `# coding:` line were dropped; setup.py install_requires was not read).
+#
+# None of these was run through Crypt Keeper before. They were picked from memory as "old packages in common
+# families", not by looking at their code or at how the tool does on them, and the same written rule applies:
+# the latest release is before 2021-01-01, an sdist exists, and at most 42 are taken, in this order.
+# Whatever the rule excludes is recorded. The result is reported whatever it is.
+#
+# group  name
+held-out  Flask-Restless
+held-out  Flask-Uploads
+held-out  Flask-Bootstrap
+held-out  Flask-Assets
+held-out  Flask-Themes
+held-out  Flask-OpenID
+held-out  Flask-SeaSurf
+held-out  Flask-Redis
+held-out  Flask-Gravatar
+held-out  Flask-Moment
+held-out  django-piston
+held-out  django-pagination
+held-out  django-celery
+held-out  django-social-auth
+held-out  South
+held-out  django-tagging
+held-out  django-sorting
+held-out  carrot
+held-out  anyjson
+held-out  amqplib
+held-out  nose-parametrized
+held-out  fixture
+held-out  mocker
+held-out  testscenarios
+held-out  testresources
+held-out  testrepository
+held-out  pinocchio
+held-out  paste
+held-out  PasteScript
+held-out  Routes
+held-out  sqlalchemy-migrate
+held-out  Elixir
+held-out  oauth2
+held-out  python-openid
+held-out  demjson
+held-out  jsonrpclib
+held-out  untangle
+held-out  dicttoxml
+held-out  pyfpdf
+held-out  Fabric3
+held-out  argh
+held-out  baker
+held-out  begins
+held-out  path.py
+held-out  funcsigs
+held-out  monotonic
+held-out  ipaddress
+held-out  backports.functools_lru_cache
+held-out  fn
+held-out  Whoosh
+held-out  pyelasticsearch
+held-out  torndb
+held-out  toro
+held-out  tornadoredis
+held-out  ws4py
+held-out  Genshi
+held-out  django-dajaxice
+held-out  Flask-Kvsession
+held-out  Flask-Misaka
+held-out  python-twitter
+held-out  pyaes
+held-out  zope.deprecation
+held-out  repoze.lru

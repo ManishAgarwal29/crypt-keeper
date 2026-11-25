@@ -166,6 +166,8 @@ class _Rewriter:
             elif isinstance(node, ast.Attribute):
                 self._attribute(node)
 
+        self._getargspec(guarded)
+
         edits = list(self.edits)
         if self.abc_edits:
             ok, insertion = self._plan_abc_import()
@@ -302,6 +304,134 @@ class _Rewriter:
         ):
             new = TESTCASE_RENAMES[node.attr]
             self._rename_attr(node, new, f"`TestCase.{node.attr}` -> `TestCase.{new}`", self.edits)
+
+    # -- inspect.getargspec -----------------------------------------------------------------------------------
+    #
+    # `getargspec` returns 4 fields (args, varargs, keywords, defaults); `getfullargspec` returns 7 (and calls the
+    # third `varkw`). A plain rename is wrong wherever the result is unpacked or measured, so only the uses that
+    # are provably the same are rewritten, and every other use stays in the manual list:
+    #   a, b, c, d = getargspec(f)      ->  a, b, c, d = getfullargspec(f)[:4]
+    #   getargspec(f).args / .varargs / .defaults, and [0] to [3]  ->  renamed
+    #   getargspec(f).keywords          ->  getfullargspec(f).varkw
+    #   spec = getargspec(f)            ->  renamed, when `spec` is a local used only as spec.args/varargs/defaults/keywords
+
+    _ARGSPEC = "inspect.getargspec"
+    _ARGSPEC_FIELDS = {"args": None, "varargs": None, "defaults": None, "keywords": "varkw"}
+
+    def _getargspec(self, guarded: set[int]) -> None:
+        if not self._active(self._ARGSPEC, REMOVED_ATTRS):
+            return
+        parents: dict[int, ast.AST] = {}
+        for parent in ast.walk(self.tree):
+            for child in ast.iter_child_nodes(parent):
+                parents[id(child)] = parent
+
+        attr_sites: list[ast.Attribute] = []
+        name_sites: list[ast.Name] = []
+        imports: list[tuple[ast.ImportFrom, ast.alias, bool]] = []  # (statement, alias, inside a guard)
+        local_names: set[str] = set()
+        for node in ast.walk(self.tree):
+            in_guard = id(node) in guarded
+            if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module == "inspect":
+                for alias in node.names:
+                    if alias.name == "getargspec":
+                        imports.append((node, alias, in_guard))
+                        local_names.add(alias.asname or alias.name)
+            elif in_guard:
+                continue
+            elif isinstance(node, ast.Attribute) and resolve_attribute(node, self.aliases) == self._ARGSPEC:
+                attr_sites.append(node)
+            elif isinstance(node, ast.Name) and self.aliases.get(node.id) == self._ARGSPEC:
+                name_sites.append(node)
+
+        for site in attr_sites:
+            plan = self._argspec_plan(site, parents)
+            if plan is not None:
+                self._rename_attr(site, "getfullargspec", "`inspect.getargspec` -> `inspect.getfullargspec`", self.edits)
+                self.edits += plan
+
+        # A name imported with `from inspect import getargspec` is renamed in the import and at every use, or not at all.
+        if not imports or any(guarded_import for _, _, guarded_import in imports):
+            return
+        every_use = [n for n in ast.walk(self.tree) if isinstance(n, ast.Name) and n.id in local_names]
+        plans = [self._argspec_plan(site, parents) for site in name_sites]
+        # Rewriting the import breaks any use that is not rewritten with it: a store, a use inside a guard, or an unknown shape.
+        if len(every_use) != len(name_sites) or any(p is None for p in plans):
+            return
+        for node, alias, _ in imports:
+            text = "getfullargspec" + (f" as {alias.asname}" if alias.asname else "")
+            a = self.src.offset(alias.lineno, alias.col_offset)
+            b = self.src.offset(alias.end_lineno, alias.end_col_offset)
+            self.edits.append(_Edit(a, b, text, alias.lineno, "`inspect.getargspec` -> `inspect.getfullargspec`"))
+        for site, plan in zip(name_sites, plans):
+            if not any(a.asname for _, a, _ in imports):  # with `as x` the call sites keep their own name
+                a = self.src.offset(site.lineno, site.col_offset)
+                b = self.src.offset(site.end_lineno, site.end_col_offset)
+                self.edits.append(_Edit(a, b, "getfullargspec", site.lineno, "`inspect.getargspec` -> `inspect.getfullargspec`"))
+            self.edits += plan or []
+
+    def _argspec_plan(self, func: ast.expr, parents: dict[int, ast.AST]) -> list[_Edit] | None:
+        """The extra edits that keep this one use of `getargspec` meaning the same, or None if it cannot be proven."""
+        call = parents.get(id(func))
+        if not (isinstance(call, ast.Call) and call.func is func):
+            return None
+        outer = parents.get(id(call))
+        end = self.src.offset(call.end_lineno, call.end_col_offset)
+
+        if isinstance(outer, ast.Attribute) and outer.value is call and outer.attr in self._ARGSPEC_FIELDS:
+            new = self._ARGSPEC_FIELDS[outer.attr]
+            return [] if new is None else self._attr_rename_edits(outer, new)
+        if (
+            isinstance(outer, ast.Subscript) and outer.value is call
+            and isinstance(outer.slice, ast.Constant) and type(outer.slice.value) is int and 0 <= outer.slice.value <= 3
+        ):
+            return []
+        if isinstance(outer, ast.Assign) and outer.value is call and len(outer.targets) == 1:
+            target = outer.targets[0]
+            if isinstance(target, (ast.Tuple, ast.List)):
+                # Any unpacking sees the same four values after `[:4]`, so even a starred or wrongly sized target behaves as before.
+                return [_Edit(end, end, "[:4]", call.lineno, "kept the 4-field shape of `getargspec` with `[:4]`")]
+            if isinstance(target, ast.Name):
+                return self._argspec_local(target, outer, parents)
+        return None
+
+    def _attr_rename_edits(self, node: ast.Attribute, new: str) -> list[_Edit]:
+        edits: list[_Edit] = []
+        self._rename_attr(node, new, f"`.{node.attr}` -> `.{new}` (the field is named `{new}` in `getfullargspec`)", edits)
+        return edits
+
+    def _argspec_local(self, target: ast.Name, assign: ast.Assign, parents: dict[int, ast.AST]) -> list[_Edit] | None:
+        """For `spec = getargspec(f)`: the `.keywords` renames, if `spec` is a local only ever read as an argspec field."""
+        scope: ast.AST | None = parents.get(id(assign))
+        while scope is not None and not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(scope, (ast.Module, ast.ClassDef, ast.Lambda)):
+                return None  # module and class variables can be read from other modules
+            scope = parents.get(id(scope))
+        if scope is None:
+            return None
+        name = target.id
+        edits: list[_Edit] = []
+        stores = 0
+        for node in ast.walk(scope):
+            if isinstance(node, (ast.Global, ast.Nonlocal)) and name in node.names:
+                return None
+            if isinstance(node, ast.arg) and node.arg == name:
+                return None
+            if not (isinstance(node, ast.Name) and node.id == name):
+                continue
+            if isinstance(node.ctx, ast.Store):
+                stores += 1  # the assignment being rewritten is one; any other store means the name is reused
+            elif isinstance(node.ctx, ast.Del):
+                return None
+            else:
+                use = parents.get(id(node))
+                if not (isinstance(use, ast.Attribute) and use.value is node and isinstance(use.ctx, ast.Load)
+                        and use.attr in self._ARGSPEC_FIELDS):
+                    return None
+                new = self._ARGSPEC_FIELDS[use.attr]
+                if new is not None:
+                    edits += self._attr_rename_edits(use, new)
+        return edits if stores == 1 else None
 
     def _rename_attr(self, node: ast.Attribute, new: str, note: str, into: list[_Edit]) -> None:
         """Replace just the attribute name token at the end of `node`."""

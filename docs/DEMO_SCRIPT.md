@@ -27,17 +27,22 @@ from a rehearsal against it (Python 3.12, Azure Container Apps), so they are wha
 |---|---|---|
 | 0:00 to 0:15 | The page, the four headstones | "Thousands of Python packages are abandoned. When Python moves on, they break, and people fork and suffer or rewrite. Crypt Keeper digs one up, finds why it died, fixes what it safely can, and then proves the result runs." |
 | 0:15 to 0:55 | Click **attrdict**. The ritual stages tick. Verdict: **It lives!** | "attrdict was last released in 2019. On Python 3.12 it dies on one line: `from collections import Mapping`. Watch the ritual: exhume, autopsy, resurrect, then proof of life on the original and the revived package, in parallel." (Pause on the red **Dead** card with the exact error, then the green **Alive** card.) |
-| 0:55 to 1:15 | Autopsy report, then the diff | "The autopsy names the cause. The fix is a precise text edit: comments and formatting stay. It moved the import to `collections.abc`." |
+| 0:55 to 1:15 | Autopsy report, then the diff. Click **Download the revival (.zip)** | "The autopsy names the cause. The fix is a precise text edit: comments and formatting stay. It moved the import to `collections.abc`. And you can take it with you: one click gives a patch you apply with git, the revived files and a report." (Show the zip's file list, or run `git apply` on it, if you have the seconds.) |
 | 1:15 to 1:45 | Click **hyper** | "Same idea, bigger payoff. hyper, an HTTP/2 library from 2016. Before revival it cannot even be imported, so its own tests mostly error out. After: 95 of its tests pass. Some still fail, 13 of them. The revival fixes what broke on Python 3.12, not every bug in a ten-year-old library. The proof is the package's own test suite, not a claim." (Say the 13 out loud, or show the red count.) |
 | 1:45 to 2:05 | Click **flask-restplus** | "It does not always work. flask-restplus needs a function that was removed from werkzeug. Crypt Keeper cannot fix that, and it says so: still dead. A tool that only reports wins is not worth trusting." |
 | 2:05 to 2:40 | Cut to the repo: `.kiro/` folder | "Built with Kiro. A spec with 8 requirements and 13 tasks drove the order. Steering kept the Coroner and Necromancer pure, which is why there are 39 property-based tests on them. Three hooks: quick tests on save, the full suite after each task, and a safety review whenever the sandbox changes. An MCP server shares the exhumer with the app, and a read-only auditor agent reviewed the sandbox, found 12 problems, and all 12 are fixed and tested." |
-| 2:40 to 2:55 | Terminal: test count, or the Kiro usage page | "About 700 tests. Real packages found the bugs tests missed: missing dependencies, a file cap that made boto look dead, a false pass on the wrong Python. Every one became a test." |
+| 2:40 to 2:55 | `docs/BENCHMARK.md`: the headline numbers | "About 950 tests. And I measured it honestly: on a list of old packages nothing was tuned on, 20 were dead on Python 3.12 and it brought back 1. The biggest cause of the rest is Python 2 code, which it reports and does not convert. The benchmark also found bugs in the tool, and I fixed them and measured again." |
 | 2:55 to 3:00 | Title card with the repo URL | "Crypt Keeper. Every dead package deserves a second life." |
 
 If a run is slow on camera, start the next package's run while you narrate the previous one, or
 speed up the waiting stretch in editing and keep the verdict at normal speed.
 
 ## Things not to say
+
+- Do not say Crypt Keeper "revives X% of abandoned packages" without the denominator. The honest line is 1 of 20
+  dead packages in a list nothing was tuned on (see `docs/BENCHMARK.md`). The four headstones are the ones it was built on.
+- Do not say it was built with, or runs on, Kiro Crew. The Undertaker script exists and is tested; the Crew job has
+  not been created or run.
 
 - Do not call the sandbox "secure". It is not a security boundary; the README says so.
 - Do not say it converts Python 2 code. It reports it.

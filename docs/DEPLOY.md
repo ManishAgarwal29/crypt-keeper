@@ -33,7 +33,9 @@ python scripts/review_dependencies.py somepackage            # prints its direct
 python scripts/review_dependencies.py somepackage --write
 ```
 
-Then add the name to `CRYPT_KEEPER_PROOF_ALLOWLIST` and rebuild the image. A test fails if a package
+The review covers what the package declares **and what a revival adds** (for example `setuptools<81` when the code imports
+`pkg_resources`; `flask-restplus` needed this), because the server runs the revived package too and refuses a dependency
+nobody reviewed. Then add the name to `CRYPT_KEEPER_PROOF_ALLOWLIST` and rebuild the image. A test fails if a package
 on the `Dockerfile` list has no entry. This covers **direct** dependencies only: pip still picks the
 latest release of their dependencies at run time, so a malicious new release of one of those would be
 installed. A review of the four listed packages found 15 projects in the full graph, all on PyPI today.
@@ -230,6 +232,12 @@ az containerapp create -n crypt-keeper -g crypt-keeper-rg --environment crypt-ke
   --env-vars "CRYPT_KEEPER_ALLOWED_HOSTS=*.azurecontainerapps.io,localhost,127.0.0.1"
 python scripts/smoke_test.py https://<fqdn printed by the last command>
 ```
+
+**What is deployed lags the repository.** The first Azure deployment was built before the zip download
+(`POST /revive/export`), the source-encoding fix and the `setup.py` dependency fix. Until you build and update the
+image (`az acr build ... -t crypt-keeper:v2 --no-logs .`, wait for `Succeeded`, then `az containerapp update ... --image ...:v2`),
+the live page has no download button. The new image was checked locally in public mode: all four listed packages give
+the same verdicts, and a downloaded patch applied cleanly to attrdict's original source.
 
 Notes:
 - The app has **no managed identity** (`identity: None`), so code in the container has no cloud token to

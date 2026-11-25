@@ -1,0 +1,74 @@
+# Benchmark candidates, in the order they are taken. Written BEFORE any held-out package was run.
+#
+# Selection rule (applied by scripts/benchmark.py, not by hand):
+#   * the package's latest PyPI release was uploaded before 2021-01-01, and
+#   * it has an sdist (Crypt Keeper reads sources from the sdist), and
+#   * at most 42 held-out packages are run: the first 42 that pass the two rules, in this order.
+# Every candidate is recorded in the results, including the ones the rule excluded and why.
+#
+# "seen" = packages used while building and testing Crypt Keeper. They are reported, but kept out of the
+# headline rate, because the code was tuned against them.
+# "held-out" = never run through Crypt Keeper before this benchmark.
+#
+# group  name
+seen      attrdict
+seen      hyper
+seen      unittest2
+seen      flask-restplus
+seen      docopt
+seen      mox3
+seen      boto
+seen      nose
+held-out  pep8
+held-out  enum34
+held-out  futures
+held-out  singledispatch
+held-out  ordereddict
+held-out  argparse
+held-out  suds-jurko
+held-out  ConfigObj
+held-out  ipaddr
+held-out  simplegeneric
+held-out  retrying
+held-out  python-memcached
+held-out  awesome-slugify
+held-out  Flask-Cache
+held-out  Flask-Mail
+held-out  Flask-Script
+held-out  xlrd
+held-out  xlwt
+held-out  mox
+held-out  fudge
+held-out  Fabric
+held-out  bunch
+held-out  python-gflags
+held-out  pystache
+held-out  ply
+held-out  blessings
+held-out  progressbar
+held-out  clint
+held-out  args
+held-out  envoy
+held-out  pyPdf
+held-out  BeautifulSoup
+held-out  jsonmerge
+held-out  nose-exclude
+held-out  nosexcover
+held-out  pytest-runner
+held-out  mock-django
+held-out  django-nose
+held-out  flask-oauthlib
+held-out  Flask-Principal
+held-out  Flask-Testing
+held-out  httpretty
+held-out  tweepy-old
+held-out  gdata
+held-out  pyDes
+held-out  zope.testrunner
+held-out  jsonpatch
+held-out  pytz-deprecation-shim
+held-out  python-daemon
+held-out  django-tastypie
+held-out  feedparser
+held-out  mechanize
+held-out  pyaml

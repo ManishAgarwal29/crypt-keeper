@@ -53,6 +53,7 @@ const runError = $("run-error");
 const results = $("results");
 
 let activeRun = null;
+let lastRequest = null; // what the results on screen were made from, so the download matches them
 let stageNodes = {};
 
 // --- tiny DOM helpers ---------------------------------------------------------------------------------
@@ -218,6 +219,7 @@ async function run(target, python) {
   const controller = new AbortController();
   const state = { controller, finished: false, timer: setInterval(tickTimers, 200) };
   activeRun = state;
+  lastRequest = { target, python };
 
   results.hidden = true;
   runError.hidden = true;
@@ -381,12 +383,47 @@ function renderResurrection(data) {
       el("summary", {}, el("span", { class: "badge sev-medium", text: "manual" }), el("strong", { text: "Needs a human" }),
         el("span", { class: "count", text: plural(revival.manual_items.length, "item") })),
       el("ul", { class: "finding-list" }, revival.manual_items.slice(0, 100).map((m) => el("li", { text: m })))),
+    (revival.diffs.length > 0 || depChanges.length > 0) && downloadBlock(),
     revival.diffs.length > 0 && [
       el("h3", { text: "Before and after" }),
       revival.diffs.map((d) => diffBlock(d)),
     ],
     !revival.diffs.length && !depChanges.length && el("p", { class: "empty", text: "Nothing could be rewritten automatically." }),
   );
+}
+
+function downloadBlock() {
+  const status = el("span", { class: "hint download-status", role: "status" });
+  const button = el("button", { type: "button", class: "button download-button", text: "Download the revival (.zip)" });
+  button.addEventListener("click", () => downloadRevival(button, status));
+  return el("div", { class: "download" }, button, status,
+    el("p", { class: "hint", text: "A patch you can apply with git, the revived .py files, the new requirements and a plain report. Nothing in it has been run." }));
+}
+
+async function downloadRevival(button, status) {
+  if (!lastRequest) return;
+  const { target, python } = lastRequest;
+  button.disabled = true;
+  status.textContent = "Preparing the archive\u2026";
+  try {
+    const response = await fetch(`${API}/revive/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: { source: guessSource(target), identifier: target }, target_python: python }),
+    });
+    if (!response.ok) throw new Error(await errorText(response));
+    const url = URL.createObjectURL(await response.blob());
+    const link = el("a", { href: url, download: `crypt-keeper-${target.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 60)}-revived.zip` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    status.textContent = "Downloaded.";
+  } catch (error) {
+    status.textContent = error.message || "The archive could not be prepared.";
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function stat(value, label) {

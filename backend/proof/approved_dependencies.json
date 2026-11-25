@@ -16,6 +16,7 @@
       "flask",
       "jsonschema",
       "pytz",
+      "setuptools",
       "six"
     ],
     "closure": [
@@ -33,11 +34,12 @@
       "pytz",
       "referencing",
       "rpds-py",
+      "setuptools",
       "six",
       "typing-extensions",
       "werkzeug"
     ],
-    "reviewed_on": "2026-11-22",
+    "reviewed_on": "2026-11-25",
     "skipped_non_plain_requirements": []
   },
   "hyper": {

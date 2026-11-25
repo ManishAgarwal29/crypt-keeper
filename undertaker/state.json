@@ -1,0 +1,145 @@
+{
+  "packages": {
+    "BeautifulSoup": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 3,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2019-10-05",
+      "manual_items": 3,
+      "status": "needs_human"
+    },
+    "Flask-Cache": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 2,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2014-04-21",
+      "manual_items": 2,
+      "status": "needs_human"
+    },
+    "Flask-Script": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 6,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2017-09-06",
+      "manual_items": 6,
+      "status": "needs_human"
+    },
+    "args": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 0,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2012-05-08",
+      "manual_items": 0,
+      "status": "alive"
+    },
+    "attrdict": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 6,
+      "error": null,
+      "files_changed": 4,
+      "last_release": "2019-02-01",
+      "manual_items": 0,
+      "status": "revivable"
+    },
+    "flask-restplus": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 2,
+      "error": null,
+      "files_changed": 2,
+      "last_release": "2019-08-12",
+      "manual_items": 0,
+      "status": "revivable"
+    },
+    "fudge": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 3,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2017-12-12",
+      "manual_items": 3,
+      "status": "needs_human"
+    },
+    "hyper": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 8,
+      "error": null,
+      "files_changed": 2,
+      "last_release": "2016-09-27",
+      "manual_items": 4,
+      "status": "needs_human"
+    },
+    "mox": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 3,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2010-08-15",
+      "manual_items": 3,
+      "status": "needs_human"
+    },
+    "pep8": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 11,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2017-10-24",
+      "manual_items": 11,
+      "status": "needs_human"
+    },
+    "python-gflags": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 2,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2017-10-27",
+      "manual_items": 2,
+      "status": "needs_human"
+    },
+    "suds-jurko": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 29,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2014-01-24",
+      "manual_items": 29,
+      "status": "needs_human"
+    },
+    "unittest2": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 1,
+      "error": null,
+      "files_changed": 1,
+      "last_release": "2015-06-30",
+      "manual_items": 0,
+      "status": "revivable"
+    },
+    "xlwt": {
+      "blockers": [],
+      "checked_on": "2026-11-25",
+      "code_findings": 0,
+      "error": null,
+      "files_changed": 0,
+      "last_release": "2017-08-22",
+      "manual_items": 0,
+      "status": "alive"
+    }
+  },
+  "version": 1
+}

@@ -11,7 +11,9 @@ crypt-keeper/
 │   │   └── autopsy.py       # cause-of-death analysis (pure, testable)
 │   ├── necromancer/
 │   │   ├── revive.py        # revival assembly + dependency bumping (pure, testable)
-│   │   └── rewriter.py      # source-preserving API rewrites (pure, testable)
+│   │   ├── rewriter.py      # source-preserving API rewrites (pure, testable)
+│   │   ├── export.py        # patch + revived sources + report as a zip (pure, testable)
+│   │   └── triage.py        # static triage and change detection for the Undertaker (pure)
 │   ├── proof/
 │   │   └── discovery.py     # what to import/test/smoke-call (pure, testable)
 │   ├── models.py            # shared Pydantic models
@@ -25,6 +27,9 @@ crypt-keeper/
 │   └── app.js               # talks to the backend API
 ├── mcp-server/
 │   └── server.py            # MCP tools: fetch PyPI metadata, repo files
+├── undertaker/              # nightly watchlist triage (run by a Kiro Crew cron job); script + state, no logic
+├── benchmark/               # candidate list and results for the success-rate benchmark
+├── scripts/                 # smoke_test.py, benchmark.py, review_dependencies.py
 ├── docs/
 │   └── KIRO_USAGE.md        # the "how Kiro was used" writeup for judges
 └── .kiro/
@@ -38,6 +43,9 @@ crypt-keeper/
   keeps them unit- and property-testable.
 - `api/` is the only layer that orchestrates and touches the network/LLM.
 - `mcp-server/` is standalone and talks to PyPI/GitHub.
+- `undertaker/` and `scripts/` orchestrate and may touch the network; any decision they make lives in a pure,
+  tested module (`necromancer/triage.py`, the functions in `scripts/benchmark.py`), not inline.
+- Nothing in the export or the Undertaker executes package code. Only `api/sandbox.py` does.
 - `frontend/` never contains business logic — it renders autopsy reports and revival results.
 
 ## Naming

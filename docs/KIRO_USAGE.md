@@ -1,8 +1,8 @@
 # How Kiro built Crypt Keeper
 
 Crypt Keeper was built in the Kiro IDE over one long session, from an empty folder to a working
-app: about 2,700 lines of backend code, 3,000 lines of tests (about 700 tests, 41 of them
-property-based), and a 780-line UI with no dependencies.
+app: about 3,300 lines of backend code, 3,900 lines of tests (about 970 tests, 50 of them
+property-based), 590 lines of scripts, and an 830-line UI with no dependencies.
 
 This page says what each Kiro feature did for the project, including where it did not help.
 
@@ -19,9 +19,10 @@ This page says what each Kiro feature did for the project, including where it di
 | Skills | Yes: two |
 | Powers | Yes: imported from a folder, and its tool and skill used |
 | Property-based testing | Yes |
-| Kiro CLI, Kiro Web, Kiro Crew | No, so I cannot compare them with the IDE |
+| Kiro CLI, Kiro Web | No, so I cannot compare them with the IDE |
+| Kiro Crew | **Designed for, not run.** The nightly Undertaker script is built and tested; the Crew job that would schedule it is written down in `undertaker/README.md` but I have not created or run it |
 
-I left Crew out on purpose. The Coroner (diagnosis) and the Necromancer (rewrites) are
+The revival itself does not use Crew. The Coroner (diagnosis) and the Necromancer (rewrites) are
 deterministic Python modules, not LLM calls. A rewrite that comes from a model cannot promise to
 be idempotent, to keep comments, or to be explainable line by line. These can all be tested
 properly when the logic is plain code, and they are tested here. So the custom agents review and
@@ -285,6 +286,71 @@ On Python 3.12.10, with the check run on the target Python itself:
 | `hyper` (2016) | dead; 4 tests pass, 13 error | alive; 95 pass, 8 fail, 5 error (19 s) |
 | `unittest2` (2015) | dead: no `MutableMapping` | alive; 6 pass, 1 fail, 21 error (19 s). It imports, but most of its own tests still do not pass. |
 | `flask-restplus` (2019) | dead: needs a removed `werkzeug` function | still dead |
+
+## Kiro Crew: the Undertaker
+
+A Crew cron job is a natural-language prompt plus a schedule that Crew runs in its own session
+([docs](https://kiro.dev/docs/crew/features/cron/)). That fits one job here: re-checking a watchlist of
+abandoned packages every night and telling me which changed. The deterministic part is plain code
+(`backend/necromancer/triage.py` and `undertaker/undertake.py`, 33 tests, mutation-checked), so the nightly
+result is reproducible. The Crew job only runs the script and writes the briefing.
+
+What is done: the script, the watchlist (14 packages whose latest release is older than 2021), the state file, the
+report, the tests. I ran the script against PyPI twice: the first night reported all 14 as new, the second reported
+no change.
+
+What is not done: **I have not created or run the Crew job.** I could not run Crew where this was built, so the
+command in `undertaker/README.md` is written from the documentation and is untested. Whether this qualifies for a
+Crew prize depends on how the rules define a Crew app; I would not claim it until the job has actually run.
+
+The static triage is also not a good predictor. Of the four development packages it called `flask-restplus`
+revivable (it is still dead) and `hyper` "needs a person" (it came back with 95 tests passing). The report says so.
+
+## The benchmark
+
+I asked "how often does it actually work?" and ran it on lists of old packages it had not seen. The answer was worse
+than the four showcase packages suggested, and it did not improve much when I worked on it: **1 of 21 dead packages came
+back (5%) on the second list, and 1 of 20 (5%) on a third list that nothing was tuned on.** Every run, package and
+caveat is in [`BENCHMARK.md`](BENCHMARK.md).
+
+I did three rounds, in this order, and kept every result file:
+1. First list: 3 of the 5 dead packages I had built the tool on came back, 0 of the 15 it had not seen. That gap is
+   the finding: the tool was tuned to its own examples.
+2. The benchmark exposed two bugs no test had (source files with a `# coding:` line silently dropped, so `xlwt` looked
+   broken and was not; `install_requires` in `setup.py` never read). I fixed them and measured a second, fresh list.
+3. I read that list's failures and made three changes: declare `setuptools` for code that imports `pkg_resources`
+   or `distutils`, rewrite `inspect.getargspec` where the replacement provably means the same, and call a
+   placeholder package "nothing to run" instead of dead. On the list they came from they revived 3 more packages. Then I
+   measured a third list nobody had read, with and without the changes: **2 of 39 outcomes differed, one a revival.**
+
+What I expected and what I got: I guessed the three changes might flip about 10 of 20 failures. They flipped 3 on the
+list they were built from and 1 on a clean list. The cause I had named for the others was sometimes right and the
+package then failed on something behind it (`fixture` on `pkg_resources.require` of itself, `sqlalchemy-migrate` on a
+removed SQLAlchemy module). Python 2 code remains the largest cause of failure (8 of the 20), and the tool does not convert it.
+
+One change nearly broke the public demo: revival now adds `setuptools<81` to `flask-restplus`, and the public host
+refuses a dependency nobody reviewed. A check on the four demo packages caught it before anything shipped, and the
+review script now reviews what a revival adds, not only what the package declares.
+
+How I kept it honest: the package lists and the rule were written before each run; every candidate is recorded,
+including the ones the rule excluded; the first run was kept untouched; I measured on a list I had not read; I ran the
+clean list on the old and new code to see what the changes did; and I reported the rate that came out, not the one I
+hoped for. Two detector refinements came from the second list and are included in the final run; they changed nothing on the third.
+
+I also made one mistake during it, caught by the test suite: a variable I set for a local check
+(`CRYPT_KEEPER_PROOF_OF_LIFE=off`) stayed in my shell and made 17 sandbox tests fail. The tests now clear it.
+
+## Download and mutation checks for the new code
+
+The export zip is checked three ways: the patch is tested to apply with `git apply` (including CRLF files, files
+without a final newline, form feeds and non-ASCII text), a property test round-trips random edits through
+`git apply`, and I downloaded a real export from the built image and applied it to attrdict's real original source.
+I then broke 34 behaviours of the export and the Undertaker on purpose; 31 broke a test, and the 3 that did not were
+equivalent mutants (the change had no observable effect), which I tightened or removed. The three later changes
+were checked the same way: 26 breakages, 20 caught at once, and 6 survivors that showed real gaps. I closed four with new tests
+(a `distutils` import in `setup.py` must stay a manual item, `[4]` must not be rewritten, `spec._asdict()` must not be
+treated as a field, a class attribute is not a local), simplified one redundant check, and loosened one rule that was
+stricter than it needed to be (any unpacking target is safe after `[:4]`, which I then verified by running the rewritten code).
 
 ## Limits and what I would do next
 

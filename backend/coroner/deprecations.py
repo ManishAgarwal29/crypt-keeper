@@ -286,6 +286,20 @@ def guarded_node_ids(tree: ast.AST) -> set[int]:
     return guarded
 
 
+def guarded_body_node_ids(tree: ast.AST) -> set[int]:
+    """Ids of every node in the *body* of a try that catches import errors, not in its handlers.
+
+    The body is what is allowed to fail; the handler is what runs when it does, so an import in a handler is real code
+    (`try: import pyutil ... except ImportError: from distutils.version import LooseVersion`).
+    """
+    guarded: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, _TRY_TYPES) and any(_catches_import_errors(h) for h in node.handlers):
+            for stmt in node.body:
+                guarded.update(id(n) for n in ast.walk(stmt))
+    return guarded
+
+
 def _catches_import_errors(handler: ast.ExceptHandler) -> bool:
     if handler.type is None:
         return True

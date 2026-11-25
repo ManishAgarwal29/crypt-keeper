@@ -12,6 +12,9 @@ def _clean_policy_environment(monkeypatch):
     """Tests start as a plain local run, whatever the shell or a container sets."""
     monkeypatch.delenv("CRYPT_KEEPER_PROOF_ALLOWLIST", raising=False)
     monkeypatch.delenv("CRYPT_KEEPER_PUBLIC", raising=False)
+    # Also settings that switch the sandbox off or resize it: a variable left in the shell must not decide a test.
+    for name in ("CRYPT_KEEPER_PROOF_OF_LIFE", "CRYPT_KEEPER_CHILD_MEM_MB"):
+        monkeypatch.delenv(name, raising=False)
 
 # The property tests check logic, not speed. Hypothesis's `too_slow` health check and per-example
 # deadline fire on a busy machine (the suite also builds virtualenvs) without any real defect,

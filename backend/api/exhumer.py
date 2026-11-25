@@ -9,8 +9,10 @@ from __future__ import annotations
 import configparser
 import io
 import os
+import ast
 import re
 import tarfile
+import tokenize
 import tomllib
 import zipfile
 from collections.abc import Callable
@@ -38,7 +40,7 @@ MAX_ARCHIVE_UNPACKED = 250_000_000  # sum of the sizes the headers claim
 MAX_ZIP_DIRECTORY = 8_000_000  # bytes of zip central directory
 MAX_DEP_LOOKUPS = 25
 
-_METADATA_NAMES = {"requires.txt", "PKG-INFO", "pyproject.toml", "setup.cfg"}
+_METADATA_NAMES = {"requires.txt", "PKG-INFO", "pyproject.toml", "setup.cfg", "setup.py"}
 _PYPI_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _GITHUB_URL_RE = re.compile(
     r"https://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?/?"
@@ -175,7 +177,7 @@ def extract_archive(content: bytes, filename: str) -> Archive:
                 py.append((path, read))
             else:
                 oversize += 1
-        elif parts[-1] in _METADATA_NAMES and size <= MAX_FILE_BYTES:
+        if parts[-1] in _METADATA_NAMES and size <= MAX_FILE_BYTES:  # setup.py is both source and metadata
             meta.append((path, read))
 
     def finish() -> Archive:
@@ -259,10 +261,9 @@ def _build_archive(
     for path, read in ((inner(p), r) for p, r in meta):
         if not is_dependency_metadata(path):
             continue
-        try:
-            metadata[path] = read().decode("utf-8")
-        except UnicodeDecodeError:
-            continue
+        text = decode_source(read())
+        if text is not None:
+            metadata[path] = text
     return Archive(py_files=found, metadata=metadata, truncated=capped or oversize > 0)
 
 
@@ -277,7 +278,7 @@ def is_dependency_metadata(path: str) -> bool:
         return parent.endswith(".egg-info")
     if name == "PKG-INFO":
         return len(parts) == 1 or parent.endswith(".egg-info")
-    return name in ("pyproject.toml", "setup.cfg") and len(parts) == 1
+    return name in ("pyproject.toml", "setup.cfg", "setup.py") and len(parts) == 1
 
 
 def parse_egg_requires(text: str) -> list[str]:
@@ -338,6 +339,42 @@ def dependencies_from_metadata(files: dict[str, str]) -> list[str]:
         deps = [line.strip() for line in raw.splitlines() if line.strip() and not line.strip().startswith("#")]
         if deps:
             return deps
+    for text in named("setup.py"):
+        deps = install_requires_from_setup_py(text)
+        if deps:
+            return deps
+    return []
+
+
+def install_requires_from_setup_py(text: str) -> list[str]:
+    """`install_requires` from a `setup(...)` call in a setup.py, read from the syntax tree. Never runs the file.
+
+    Handles a literal list, tuple or string, and a name bound once at module level to such a literal
+    (`requires = [...]` then `install_requires=requires`). Anything computed is ignored, so the answer can be
+    incomplete but is never invented.
+    """
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError, RecursionError):
+        return []
+    bound: dict[str, ast.expr] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            bound.setdefault(node.targets[0].id, node.value)
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "setup"):
+            continue
+        for kw in node.keywords:
+            if kw.arg != "install_requires":
+                continue
+            value = bound.get(kw.value.id, kw.value) if isinstance(kw.value, ast.Name) else kw.value
+            try:
+                literal = ast.literal_eval(value)
+            except (ValueError, TypeError, SyntaxError, RecursionError, MemoryError):
+                continue
+            items = literal.splitlines() if isinstance(literal, str) else literal
+            if isinstance(items, (list, tuple)) and all(isinstance(i, str) for i in items):
+                return [i.strip() for i in items if i.strip() and not i.strip().startswith("#")]
     return []
 
 
@@ -372,11 +409,25 @@ def _read_best(candidates: list[tuple[str, Callable[[], bytes]]]) -> tuple[dict[
         if len(found) >= MAX_PY_FILES:
             capped = True
             break
-        try:
-            found[path] = read().decode("utf-8")
-        except UnicodeDecodeError:
+        text = decode_source(read())
+        if text is None:
             capped = True
+        else:
+            found[path] = text
     return dict(sorted(found.items())), capped
+
+
+def decode_source(data: bytes) -> str | None:
+    """Decode a Python source file the way Python itself would: by its PEP 263 `# coding:` line, UTF-8 if none.
+
+    Old packages often declare latin-1 or another legacy encoding, so UTF-8 alone would drop those files and
+    leave the package incomplete. None means the file does not decode under the encoding it declares.
+    """
+    try:
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+        return data.decode(encoding)
+    except (SyntaxError, LookupError, UnicodeDecodeError):
+        return None
 
 
 def _clean_member_path(name: str) -> str | None:

@@ -22,7 +22,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -41,6 +41,7 @@ from models import (
     RevivalResult,
     ReviveResponse,
 )
+from necromancer.export import archive_name, build_export
 from necromancer.revive import revive, revived_snapshot
 from proof.discovery import validate_dependencies
 from proof.policy import (
@@ -338,6 +339,37 @@ def revive_package(req: ReviveRequest) -> ReviveResponse:
         if event["event"] == "result":
             return event["response"]
     raise RuntimeError("The pipeline ended without a result.")
+
+
+class ExportRequest(BaseModel):
+    ref: PackageRef
+    target_python: str = "3.12"
+
+
+@app.post(
+    "/revive/export",
+    response_class=Response,
+    responses={**_ERRORS, 200: {"content": {"application/zip": {}}, "description": "patch, revived sources and report"}},
+)
+def export_revival(req: ExportRequest) -> Response:
+    """Exhume, diagnose and revive a package, and return the result as a zip.
+
+    The zip holds `patch.diff`, the revived `.py` files, the revised requirements and a plain report. Nothing
+    is executed, so this works on any package even where proof of life is limited to a list.
+    Failure modes: 404 not found, 413 archive too large, 422 invalid name or unreadable archive,
+    429 GitHub rate limit, 502 upstream unreachable, 503 busy.
+    """
+    snapshot = _exhume(req.ref, req.target_python)
+    report = run_autopsy(snapshot, req.target_python, date.today())
+    revival = revive(snapshot, report)
+    return Response(
+        content=build_export(snapshot, report, revival),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{archive_name(req.ref.identifier)}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.post("/revive/stream")

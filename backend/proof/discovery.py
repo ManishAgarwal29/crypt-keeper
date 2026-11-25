@@ -106,6 +106,16 @@ def is_test_file(path: str) -> bool:
     )
 
 
+def is_runtime_source(path: str) -> bool:
+    """True for a file that runs when the package is imported: not a test, a build script, docs or an example."""
+    return (
+        path.endswith(".py")
+        and not is_test_file(path)
+        and basename(path) not in _NON_IMPORT_FILES
+        and not any(part in _NON_IMPORT_DIRS for part in path.split("/")[:-1])
+    )
+
+
 def find_shipped_tests(paths: list[str]) -> list[str]:
     """Test files pytest would collect by default (`test_*.py`, `*_test.py`), capped."""
     found = sorted(
@@ -263,6 +273,27 @@ def pytest_command(python: str, src: str, tests: list[str]) -> list[str]:
     """The pytest invocation. `--` keeps a hostile test path from being read as an option."""
     return [python, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", "--continue-on-collection-errors",
             "-o", "addopts=", "--rootdir", src, "--", *tests]
+
+
+_CODING_COOKIE = re.compile(r"^[ \t\f]*#.*?coding[:=][ \t]*([A-Za-z0-9_-]+)")
+
+
+def encode_source(text: str) -> bytes:
+    """The bytes to write for a source file: in the encoding its PEP 263 `# coding:` line declares, else UTF-8.
+
+    The exhumer decodes a file by its declaration, so writing it back the same way gives Python the bytes it
+    expects. A name that is not a text encoding, or a file whose text cannot be encoded that way, is written as
+    UTF-8. The name is limited to letters, digits, `_` and `-`, so a hostile file cannot make us look up an
+    arbitrary module through the codec registry.
+    """
+    for line in text.split("\n", 2)[:2]:
+        match = _CODING_COOKIE.match(line)
+        if match:
+            try:
+                return text.encode(match.group(1))
+            except (LookupError, UnicodeError):
+                break
+    return text.encode("utf-8")
 
 
 def redact(text: str, replacements: dict[str, str]) -> str:

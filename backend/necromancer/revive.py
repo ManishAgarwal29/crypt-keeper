@@ -6,6 +6,7 @@ never-drop-a-module, no-pin-below-floor). See .kiro/specs/crypt-keeper-core/desi
 from __future__ import annotations
 
 import difflib
+import re
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import Specifier, SpecifierSet
@@ -13,8 +14,12 @@ from packaging.utils import canonicalize_name
 from packaging.version import Version
 
 from models import AutopsyReport, FileDiff, PackageSnapshot, RevivalResult
+from coroner.deprecations import parse_target
 from necromancer.floors import floor_for
 from necromancer.rewriter import rewrite_deprecated
+from necromancer.setuptools_dep import declare_setuptools
+
+_DISTUTILS_REMOVED = re.compile(r"`distutils(\.\w+)*` was removed in Python")
 
 
 
@@ -64,6 +69,8 @@ def _bump_one(raw: str, target_python: str) -> tuple[str, list[str], list[str]]:
             lower = Specifier(f">={Version(ver).public}")
             kept.append(lower)
             applied.append(f"Unpinned {req.name}: {spec} -> {lower}")
+        elif (op, ver) == ("<", "81") and canonicalize_name(req.name) == "setuptools":
+            kept.append(spec)  # the cap `declare_setuptools` adds so that pkg_resources exists; it must survive a second revival
         elif op in ("<", "<="):
             applied.append(
                 f"Removed upper bound {spec} from {req.name} (check the code against newer releases)"
@@ -138,13 +145,19 @@ def revive(snapshot: PackageSnapshot, report: AutopsyReport) -> RevivalResult:
     applied += dep_applied
     manual += dep_manual
 
+    setuptools_declared = False
+    if parse_target(report.target_python) >= (3, 12):  # a fresh 3.12 environment has no setuptools; older ones do
+        new_deps, setuptools_applied, setuptools_declared = declare_setuptools(new_deps, snapshot.source_map)
+        applied += setuptools_applied
+
     for path in sorted(snapshot.source_map):
         content = snapshot.source_map[path]
         new_content, file_applied, file_manual = rewrite_deprecated(content, report.target_python, path)
         if new_content != content:
             diffs.append(_file_diff(path, content, new_content))
         applied += file_applied
-        manual += file_manual
+        # `distutils` is only a problem while nothing provides it; setuptools does, once it is a dependency.
+        manual += [m for m in file_manual if not (setuptools_declared and _DISTUTILS_REMOVED.search(m))]
 
     return RevivalResult(diffs=diffs, dependencies=new_deps, applied=applied, manual_items=manual)
 

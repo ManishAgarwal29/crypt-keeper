@@ -26,6 +26,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
 from api.exhumer import ExhumeError, exhume_pypi, fetch_pypi_metadata  # noqa: E402
+from coroner.autopsy import run_autopsy  # noqa: E402
+from necromancer.revive import revive  # noqa: E402
 from proof.discovery import validate_dependencies  # noqa: E402
 from proof.policy import APPROVED_FILE, dependency_names, normalize  # noqa: E402
 
@@ -60,7 +62,10 @@ def closure(names: list[str], client: httpx.Client) -> list[str]:
 
 def review(package: str, client: httpx.Client) -> dict:
     snapshot = exhume_pypi(package, "3.12", client)
-    direct, rejected = validate_dependencies(snapshot.dependencies)
+    # The server runs the original AND the revived package, and a revival can add a dependency (setuptools, for code
+    # that imports pkg_resources or distutils). Review both lists, or the revived run is refused on a public host.
+    revival = revive(snapshot, run_autopsy(snapshot, "3.12", date.today()))
+    direct, rejected = validate_dependencies(snapshot.dependencies + [d for d in revival.dependencies if d not in snapshot.dependencies])
     names = sorted(set(dependency_names(direct)))
     return {
         "dependencies": names,

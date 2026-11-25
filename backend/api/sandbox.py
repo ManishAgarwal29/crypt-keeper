@@ -38,7 +38,9 @@ from proof.discovery import (
     RESULT_FILENAME,
     RUNNER_SCRIPT,
     discover_modules,
+    encode_source,
     find_shipped_tests,
+    is_runtime_source,
     limited_command,
     parse_pytest_summary,
     pick_primary,
@@ -340,7 +342,7 @@ def _write_sources(root: Path, source_map: dict[str, str]) -> str | None:
             return f"Refusing to write outside the sandbox: {path!r}."
         try:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(content.encode("utf-8"))
+            dest.write_bytes(encode_source(content))
         except (OSError, UnicodeEncodeError) as exc:
             LOGGER.warning("Could not write %r: %s", path, exc)
             return f"Could not write {path!r} into the sandbox."
@@ -413,7 +415,17 @@ def _run(snapshot: PackageSnapshot, target_python: str, started: float) -> Proof
     paths = sorted(snapshot.source_map)
     plan = discover_modules(paths)
     if not plan.modules:
-        return ProofOfLife(imported=False, error="No importable Python package or module found in the source.")
+        # Nothing here can be imported, so nothing can be checked. That is not the same as dead: a distribution that is
+        # only a `setup.py` is usually a placeholder that installs another package. Say so and run nothing.
+        only_build_files = all(not is_runtime_source(p) for p in paths)
+        hint = (
+            f" It looks like a placeholder: only build or test files, and it depends on {', '.join(snapshot.dependencies[:5])}."
+            if only_build_files and snapshot.dependencies else ""
+        )
+        return ProofOfLife(
+            imported=False, skipped=True,
+            error="No importable Python package or module was found in the source, so there is nothing to run." + hint,
+        )
 
     interpreter, version, matched = find_interpreter_cached(target_python)
     tests = find_shipped_tests(paths)
