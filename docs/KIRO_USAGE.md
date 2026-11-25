@@ -282,8 +282,8 @@ On Python 3.12.10, with the check run on the target Python itself:
 | Package | Before | After |
 |---|---|---|
 | `attrdict` (2019) | dead: `cannot import name 'Mapping' from 'collections'` | alive (13 s) |
-| `hyper` (2016) | dead; 4 tests pass, 13 error | alive; 95 pass (29 s) |
-| `unittest2` (2015) | dead: no `MutableMapping` | alive; 6 pass (30 s) |
+| `hyper` (2016) | dead; 4 tests pass, 13 error | alive; 95 pass, 8 fail, 5 error (19 s) |
+| `unittest2` (2015) | dead: no `MutableMapping` | alive; 6 pass, 1 fail, 21 error (19 s). It imports, but most of its own tests still do not pass. |
 | `flask-restplus` (2019) | dead: needs a removed `werkzeug` function | still dead |
 
 ## Limits and what I would do next

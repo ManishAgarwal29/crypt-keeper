@@ -28,7 +28,7 @@ Real runs on Python 3.12.10 (checked on the target Python, not a stand-in):
 |---|---|---|---|
 | `attrdict` (2019) | dead: `cannot import name 'Mapping' from 'collections'` | alive | 13 s |
 | `hyper` (2016) | dead: `cannot import name 'Iterable' from 'collections'`; 4 tests pass, 13 error | alive; 95 tests pass, 8 fail, 5 error | 29 s |
-| `unittest2` (2015) | dead: `no attribute 'MutableMapping'`; 14 test errors | alive; 6 tests pass | 30 s |
+| `unittest2` (2015) | dead: `no attribute 'MutableMapping'`; 14 test errors | alive; 6 tests pass, 1 fail, 21 error | 19 s |
 | `flask-restplus` (2019) | dead: `cannot import name 'cached_property' from 'werkzeug'` | still dead | 27 s |
 
 ![The verdict for attrdict: It lives!](docs/screenshots/verdict.png)
