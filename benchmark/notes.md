@@ -175,3 +175,29 @@ built), `results-run6-third-new-levers.jsonl` (third list, levers as first built
 `results-run7-fifth-after.jsonl` (the clean fifth list, commit 154ff82 and the final code: **the headline**), and
 `results-run8-third-final.jsonl` and `results-run8-fourth-final.jsonl` (development lists, final code). To rebuild the
 baseline image: `git worktree add --detach ../ck-baseline 154ff82`, then `docker build -t crypt-keeper:base .` there.
+
+
+## Round 4: every list rerun on the final code (commit 279f3b3)
+
+All five lists were run again on the code that will be deployed (after the retry with the original dependencies, the
+failure hints and opt-in source builds), in a fresh container, one day after round 3. Results: `results-run9-*.jsonl`.
+
+| List | Last recorded run | Rerun | Changed outcomes |
+|---|---|---|---|
+| Fifth (clean, the headline) | 5 of 14 dead revived (run 7) | 5 of 14 | none of 42 |
+| Fourth | 6 of 16 (run 8) | 6 of 16 | none of 42 |
+| Third | 6 of 20 (run 8) | 6 of 20 | none of 39 |
+| Second | 4 of 18 (run 3) | 10 of 16 | 8 |
+| First | 3 of 19 (run 2) | 9 of 19 | 7 |
+
+- **The three lists measured in round 3 reproduced exactly**, outcome for outcome, a day later. The headline does not change.
+- **The first two lists jumped because their last runs predate round 3**, and their failures are what the round 3 changes were
+  designed from. Those numbers flatter the tool and are not evidence of how it does on new packages.
+- **`pyelasticsearch` went from `regressed` to `already_alive`**: the retry with the original dependencies, in a real run.
+- **`Whoosh` went from `improved` to `already_alive`.** Its earlier "improvement" was 571 to 572 passing tests out of 575;
+  this time both runs passed 572. A one-test difference can be a flaky test.
+- **Two runs did not finish.** `sqlalchemy-migrate` and `Elixir` (second list) both timed out after about 2,630 s, ending within
+  4 seconds of each other. Rerun alone and together they finish in 25 to 40 s (`results-run9-second-rerun.jsonl`: both
+  `still_dead`). The error rows are kept as they happened. Two requests stalling for the same time points to something that
+  held up the whole container, which I could not confirm. It does show a real gap: the 600 s budget covers running a package,
+  but nothing bounds a whole request, so a slow source download or dependency lookup can hold one open.
