@@ -47,6 +47,7 @@ RENAMES: dict[str, str] = {
     "string.uppercase": "ascii_uppercase",
     "sys.maxint": "maxsize",
     "itertools.izip_longest": "zip_longest",
+    "unittest._TextTestResult": "TextTestResult",
 }
 
 # dotted old name -> built-in that replaces it

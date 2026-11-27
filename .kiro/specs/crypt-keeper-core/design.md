@@ -56,6 +56,17 @@ autopsy, revival, both proofs, verdict, reason, timings).
   endings survive. Rewrites drop-in replacements only; anything else is re-scanned and returned as
   a manual item.
 - `floors.py`: first release with real wheel coverage per Python version, derived from PyPI.
+- `removed_names.py`: a table of names a dependency removed (Jinja2 3.1, Werkzeug 2.2, paramiko 4,
+  Flask 1.0 and 3.0, ...) with the requirement that brings each back. Every entry was installed
+  from wheels on Python 3.12 and checked, with a control above the ceiling. Caps are merged, the
+  strictest wins, and `bump_dependencies` keeps a cap only while the code still needs it.
+- `declare_imports.py`: declares well-known libraries the package imports but does not declare,
+  from a fixed import-name to distribution table. Never guesses a PyPI name.
+- `py2convert.py`: converts Python 2 source with `lib2to3` in memory. It runs only when a runtime
+  file does not parse as Python 3, keeps only output that compiles, and resolves implicit relative
+  imports from the snapshot's own file list instead of the disk, so the module stays pure. It is
+  the one transform that is not a drop-in replacement, so `revive(..., convert_python2=)` and
+  `CRYPT_KEEPER_CONVERT_PYTHON2` switch it, and the Undertaker leaves it off.
 
 ### Proof of life
 - `proof/discovery.py` (pure): find importable packages and sys.path roots, shipped tests, safe

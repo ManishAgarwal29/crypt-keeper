@@ -42,7 +42,8 @@ from models import (
     ReviveResponse,
 )
 from necromancer.export import archive_name, build_export
-from necromancer.revive import revive, revived_snapshot
+from necromancer.revive import keep_original_dependencies, revive, revived_snapshot
+from proof.diagnosis import diagnose
 from proof.discovery import validate_dependencies
 from proof.policy import (
     is_allowed,
@@ -65,6 +66,11 @@ _exhume_slots = threading.BoundedSemaphore(int(os.environ.get("CRYPT_KEEPER_MAX_
 
 def _csv_env(name: str, default: str) -> list[str]:
     return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
+
+
+def convert_python2_enabled() -> bool:
+    """Whether revival converts Python 2 source with lib2to3. On by default; CRYPT_KEEPER_CONVERT_PYTHON2=off disables it."""
+    return os.environ.get("CRYPT_KEEPER_CONVERT_PYTHON2", "on").strip().lower() not in ("off", "0", "false", "no")
 
 
 ALLOWED_ORIGINS = _csv_env(
@@ -144,6 +150,17 @@ def _run_proof(snapshot: PackageSnapshot, target_python: str) -> ProofOfLife:
         _proof_slots.release()
 
 
+def _should_retry_with_original_dependencies(
+    snapshot: PackageSnapshot, revival: RevivalResult, before: ProofOfLife | None, after: ProofOfLife | None
+) -> bool:
+    """True when the original imported, the revived package did not, and the revision changed its dependencies."""
+    return (
+        before is not None and before.imported and not before.skipped
+        and after is not None and not after.imported and not after.skipped
+        and list(revival.dependencies) != list(snapshot.dependencies)
+    )
+
+
 def dependency_block(snapshot: PackageSnapshot) -> str | None:
     """Why this snapshot's dependencies may not be installed on this server, or None if they may.
 
@@ -219,7 +236,7 @@ def autopsy(snapshot: PackageSnapshot, target_python: str = "3.12") -> AutopsyRe
 @app.post("/resurrect", response_model=RevivalResult)
 def resurrect(snapshot: PackageSnapshot, target_python: str = "3.12") -> RevivalResult:
     """Revive a snapshot: bump dependencies and rewrite removed APIs. Nothing is executed."""
-    return revive(snapshot, run_autopsy(snapshot, target_python, date.today()))
+    return revive(snapshot, run_autopsy(snapshot, target_python, date.today()), convert_python2=convert_python2_enabled())
 
 
 class ProofRequest(BaseModel):
@@ -282,7 +299,7 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
 
     yield start("revive")
     t = time.perf_counter()
-    revival = revive(snapshot, report)
+    revival = revive(snapshot, report, convert_python2=convert_python2_enabled())
     yield done("revive", t, f"{len(revival.diffs)} files changed")
 
     before = after = None
@@ -310,6 +327,16 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
                 else:
                     before = proof
                 yield done(stage, t, "skipped" if proof.skipped else "alive" if proof.imported else "dead", record=False)
+        if _should_retry_with_original_dependencies(snapshot, revival, before, after):
+            # Do no harm: the original worked and the revival does not. Loosened version caps are the usual cause,
+            # so run the revived code once more with the package's own dependency list.
+            conservative = keep_original_dependencies(snapshot, revival, target, convert_python2=convert_python2_enabled())
+            yield start("proof_after")
+            retry_started = time.perf_counter()
+            retried = _run_proof(revived_snapshot(snapshot, conservative), target)
+            if retried.imported:
+                revival, after = conservative, retried
+            yield done("proof_after", retry_started, "alive (original dependency limits)" if retried.imported else "dead", record=False)
         timings["proof_of_life"] = round(time.perf_counter() - t, 2)
 
     verdict, reason = judge(before, after, truncated=snapshot.truncated)
@@ -324,6 +351,7 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
             verdict=verdict,
             verdict_reason=reason,
             timings=timings,
+            failure_hint=diagnose(after, sorted(snapshot.source_map)),  # None whenever the revived package imported
         ),
     }
 
@@ -361,7 +389,7 @@ def export_revival(req: ExportRequest) -> Response:
     """
     snapshot = _exhume(req.ref, req.target_python)
     report = run_autopsy(snapshot, req.target_python, date.today())
-    revival = revive(snapshot, report)
+    revival = revive(snapshot, report, convert_python2=convert_python2_enabled())
     return Response(
         content=build_export(snapshot, report, revival),
         media_type="application/zip",

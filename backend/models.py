@@ -144,6 +144,14 @@ class PackageSummary(BaseModel):
         )
 
 
+class FailureHint(BaseModel):
+    """Why a revived package still does not import, read from its error, and what to try next."""
+
+    category: str = Field(description="which rule matched, e.g. python2-syntax or dependency-removed-a-name")
+    summary: str = Field(description="the error it was read from, shortened")
+    next_step: str
+
+
 class ReviveResponse(BaseModel):
     """The whole pipeline in one payload: what the UI renders."""
 
@@ -155,6 +163,7 @@ class ReviveResponse(BaseModel):
     verdict: Verdict
     verdict_reason: str
     timings: dict[str, float] = Field(default_factory=dict, description="seconds spent per stage")
+    failure_hint: FailureHint | None = Field(default=None, description="why the revived package still fails, if it does")
 
 
 class ErrorResponse(BaseModel):

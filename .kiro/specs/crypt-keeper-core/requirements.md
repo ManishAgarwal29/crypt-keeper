@@ -49,6 +49,23 @@ modern Python, so that I can actually use it.
    "manual revival needed" item rather than silently skipping it.
 4. WHEN revival completes THEN the system SHALL produce a diff between the dead and
    revived source.
+5. WHEN code that runs at import uses a name a dependency has removed, and the name is in the
+   verified table (`necromancer/removed_names.py`) THEN the Necromancer SHALL cap that
+   dependency below the release that removed it. It SHALL NOT add a cap the code does not need,
+   and SHALL NOT keep a cap on a later revival that the code no longer needs.
+6. WHEN code that runs at import imports a library the package does not declare THEN the
+   Necromancer SHALL declare it, using only a fixed table of well-known libraries
+   (`necromancer/declare_imports.py`), and SHALL report, not declare, a library known to be dead
+   on the target Python. An import name that is not in the table SHALL be left alone.
+7. WHEN a file that runs at import does not parse as Python 3 and `lib2to3` can fix it THEN the
+   Necromancer SHALL convert the package's Python 2 source. It SHALL keep only output that
+   compiles, SHALL say that the conversion is mechanical, and SHALL NOT touch a package whose only
+   Python 2 files are tests, setup scripts, docs or examples. The conversion SHALL be switchable
+   (`CRYPT_KEEPER_CONVERT_PYTHON2=off`).
+8. Reviving an already revived snapshot SHALL change nothing, including for 5 to 7.
+9. Every claim about how often revival works SHALL come from a list that was not used to decide
+   what to build, and the report SHALL say which lists were used to develop the code
+   (`docs/BENCHMARK.md`).
 
 ### Requirement 4: Proof of life (tests)
 **User Story:** As a developer, I want evidence the revived package works, so that I trust

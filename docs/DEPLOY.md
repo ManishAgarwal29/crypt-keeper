@@ -181,6 +181,7 @@ bills continuously, so check the price and remove it afterwards.
 | `CRYPT_KEEPER_MAX_PROOFS` | `4` | Concurrent sandbox runs. A `/revive` uses two. |
 | `CRYPT_KEEPER_MAX_EXHUMES` | `8` | Concurrent downloads and unpackings. Each holds an archive in memory. |
 | `CRYPT_KEEPER_CHILD_MEM_MB` | `3072` | Address-space limit for each sandboxed process (Linux). `0` disables it. |
+| `CRYPT_KEEPER_ALLOW_SOURCE_BUILDS` | off | Local use only: build a dependency with no wheel from source (runs its `setup.py`). Ignored while `CRYPT_KEEPER_PUBLIC` is on, so it cannot be switched on for a public host by mistake. |
 
 To change one after deploying (the allowlist contains commas, so use gcloud's alternate delimiter;
 see `gcloud topic escaping`):

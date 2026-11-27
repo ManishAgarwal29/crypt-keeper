@@ -326,7 +326,7 @@ I did three rounds, in this order, and kept every result file:
 What I expected and what I got: I guessed the three changes might flip about 10 of 20 failures. They flipped 3 on the
 list they were built from and 1 on a clean list. The cause I had named for the others was sometimes right and the
 package then failed on something behind it (`fixture` on `pkg_resources.require` of itself, `sqlalchemy-migrate` on a
-removed SQLAlchemy module). Python 2 code remains the largest cause of failure (8 of the 20), and the tool does not convert it.
+removed SQLAlchemy module). Python 2 code was the largest cause of failure (8 of the 20). I then added in-memory Python 2 conversion, an import-declaration table and verified dependency caps, wrote a fresh list after the code was final, and measured against a clean build of the earlier commit: 3 of 14 before, 5 of 14 after (overlapping intervals). The fourth list exposed two flaws in my own conversion trigger (it converted over stray py2 test files), which I fixed before the clean run.
 
 One change nearly broke the public demo: revival now adds `setuptools<81` to `flask-restplus`, and the public host
 refuses a dependency nobody reviewed. A check on the four demo packages caught it before anything shipped, and the
@@ -339,6 +339,23 @@ hoped for. Two detector refinements came from the second list and are included i
 
 I also made one mistake during it, caught by the test suite: a variable I set for a local check
 (`CRYPT_KEEPER_PROOF_OF_LIFE=off`) stayed in my shell and made 17 sandbox tests fail. The tests now clear it.
+
+## Two Kiro sessions on one repository
+
+The last round of improvements was done by two Kiro IDE sessions working on the same folder at different times,
+without knowing about each other. One built Python 2 conversion, the removed-name dependency caps, import declaration,
+the autopsy check (`docs/DIAGNOSIS.md`) and benchmark lists four and five. The other, a day later, set out to build an
+overlapping list from the same benchmark findings.
+
+The second session noticed only because a test printed messages it had not written. It stopped, listed the
+uncommitted files it had not made, and asked before going on. Then it kept the first session's versions of the three
+overlapping fixes, deleted its own duplicate of one of them, and added the three that were new: a retry with the
+original dependencies when a revision breaks a working package, a cause and next step for every failure, and opt-in
+source builds that a public host refuses. It also merged the two sets of dependency changes into one function, because
+the retry has to undo exactly what the revision did, and a duplicate would have undone the wrong thing.
+
+The lesson: nothing in the IDE warns that another session is editing the same files. Uncommitted work from elsewhere
+looks like your own. Checking `git status` before starting, and committing when a session ends, would have prevented it.
 
 ## Download and mutation checks for the new code
 
@@ -357,5 +374,5 @@ stricter than it needed to be (any unpacking target is safe after `[:4]`, which 
 - Pin the transitive dependencies of the listed packages by hash.
 - Run proof of life in a container with real isolation. The current sandbox is not a security boundary.
 - Use the `necromancer` agent on a real change, and try the CLI, Web and Crew, none of which I have used.
-- Convert Python 2 source. Today it is reported, not converted.
+- Make Python 2 conversion semantic. Today it fixes syntax only (lib2to3), not text versus bytes or integer division.
 - Handle data files and C extensions, which the exhumer skips.

@@ -63,3 +63,19 @@
   - End-to-end pass on 2-3 real dead packages for the video.
   - Fill in `docs/KIRO_USAGE.md`.
   - _Requirements: all (integration)_
+- [x] 14. Declare imports the package forgot to declare
+  - `necromancer/declare_imports.py`, a fixed import-name table, wired into `revive`. Idempotent;
+    reports libraries that are dead on the target Python instead of declaring them.
+  - _Requirements: 3.6, 3.8_
+- [x] 15. Cap dependencies below the release that removed a name
+  - `necromancer/removed_names.py`: every entry installed from wheels on Python 3.12 and checked
+    (evidence in `benchmark/notes.md`). `bump_dependencies` keeps a cap only while it is needed.
+  - _Requirements: 3.5, 3.8_
+- [x] 16. Convert Python 2 source
+  - `necromancer/py2convert.py` with `lib2to3`, in memory. Trigger on runtime files only, keep
+    only output that compiles, switchable by `CRYPT_KEEPER_CONVERT_PYTHON2`.
+  - _Requirements: 3.7, 3.8_
+- [x] 17. Measure it on a list nobody had read
+  - A fifth list written before the levers were run, a baseline image from the previous commit,
+    both run against the same PyPI on the same day, development lists labelled as such.
+  - _Requirements: 3.9_

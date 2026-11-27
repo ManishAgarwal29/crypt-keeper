@@ -293,6 +293,9 @@ function renderVerdict(data) {
       el("strong", { text: "Check this on the right Python. " }),
       `Python ${data.autopsy.target_python} is not installed on this machine, so the check ran on ${after.python_used}. ` +
       `A package that works there can still fail on ${data.autopsy.target_python}. Install it for a real verdict.`),
+    data.failure_hint && el("p", { class: "callout hint", role: "note" },
+      el("strong", { text: "What to try next: " }), data.failure_hint.next_step,
+      el("span", { class: "hint-category", text: ` (read from the error; rule: ${data.failure_hint.category})` })),
     el("p", { class: "subject" },
       el("strong", { text: data.package.identifier }),
       ` \u00b7 target Python ${data.autopsy.target_python}`,

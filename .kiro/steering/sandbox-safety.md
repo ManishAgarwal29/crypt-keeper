@@ -14,7 +14,10 @@ project. Do not weaken one without replacing its protection and its test.
 - **No untrusted value reaches code or a shell.** The runner script is a static string
   (`RUNNER_SCRIPT`); inputs travel in a JSON config file. Commands are argument lists, never strings.
 - **Dependencies are plain requirements only.** `validate_dependencies` rejects pip options and URLs
-  (`--index-url`, `pkg @ https://...`, `-r file`). Installs use `--only-binary=:all:` so no `setup.py`
+  (`--index-url`, `pkg @ https://...`, `-r file`). The one exception to wheel-only, `CRYPT_KEEPER_ALLOW_SOURCE_BUILDS`, is
+  off unless explicitly on, **refused whenever `is_public` is true**, retries only what failed wheel-only, keeps `--` before the
+  requirement, and logs every dependency it built. Never widen it, and never let a public host reach it.
+  Otherwise installs use `--only-binary=:all:` so no `setup.py`
   runs, and `--` before the requirements so nothing can be read as an option.
 - **Paths cannot escape.** Every path goes through `safe_relative_path`, then a resolved-path
   containment check. Reject absolute paths, `..`, backslashes, drive letters, Windows reserved names.

@@ -13,7 +13,7 @@ def _clean_policy_environment(monkeypatch):
     monkeypatch.delenv("CRYPT_KEEPER_PROOF_ALLOWLIST", raising=False)
     monkeypatch.delenv("CRYPT_KEEPER_PUBLIC", raising=False)
     # Also settings that switch the sandbox off or resize it: a variable left in the shell must not decide a test.
-    for name in ("CRYPT_KEEPER_PROOF_OF_LIFE", "CRYPT_KEEPER_CHILD_MEM_MB"):
+    for name in ("CRYPT_KEEPER_PROOF_OF_LIFE", "CRYPT_KEEPER_CHILD_MEM_MB", "CRYPT_KEEPER_ALLOW_SOURCE_BUILDS"):
         monkeypatch.delenv(name, raising=False)
 
 # The property tests check logic, not speed. Hypothesis's `too_slow` health check and per-example

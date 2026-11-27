@@ -278,3 +278,5 @@ pre.log { margin: 0; padding: 0.8rem 0.95rem; overflow: auto; max-height: 20rem;
 .download .hint { margin: 0; }
 .download p.hint { flex-basis: 100%; }
 .download-button { font-size: 0.95rem; padding: 0.55rem 1.1rem; }
+
+.hint-category { color: var(--muted); font-size: 0.85rem; }

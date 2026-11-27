@@ -87,6 +87,7 @@ REMOVED_ATTRS: dict[str, Removal] = {
     "locale.resetlocale": Removal((3, 13), "use locale.setlocale(locale.LC_ALL, '')"),
     "unittest.makeSuite": Removal((3, 13), "use unittest.TestLoader.loadTestsFromTestCase"),
     "unittest.findTestCases": Removal((3, 13), "use unittest.TestLoader.loadTestsFromModule"),
+    "unittest._TextTestResult": Removal((3, 12), "use unittest.TextTestResult"),
     "unittest.getTestCaseNames": Removal((3, 13), "use unittest.TestLoader.getTestCaseNames"),
     "fractions.gcd": Removal((3, 9), "use math.gcd"),
     "base64.encodestring": Removal((3, 9), "use base64.encodebytes"),

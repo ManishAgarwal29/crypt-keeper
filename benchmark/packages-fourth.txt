@@ -1,0 +1,97 @@
+# Fourth benchmark set, written BEFORE the Python 2 conversion, the removed-name ceilings and the declared-import
+# changes were run on anything, and never run through Crypt Keeper before.
+#
+# Why a fourth list: the three earlier lists are where those three changes came from (their failures were read to
+# decide what to build), so a result on them is a development result. These were picked from memory as "old packages
+# in families the earlier lists did not use": command-line and text utilities, dates, testing tools, small web
+# frameworks, old database layers, async and RPC libraries, devops tools, small domain libraries, old astronomy
+# tools. I did not look at their code, and I did not look at how the tool does on them.
+#
+# The same written rule applies, and scripts/benchmark.py applies it, not me:
+#   * the latest release was uploaded before 2021-01-01, and
+#   * it has an sdist, and
+#   * at most 42 held-out packages are run: the first 42 that pass, in this order.
+#
+# Every candidate is recorded, including the ones the rule excludes. Names that PyPI does not know are excluded.
+
+# command-line and text utilities
+held-out terminaltables
+held-out progress
+held-out npyscreen
+held-out pep257
+held-out fuzzywuzzy
+held-out python-Levenshtein
+held-out smartypants
+held-out Cheetah
+
+# dates and times
+held-out delorean
+held-out maya
+held-out parsedatetime
+held-out times
+held-out isoweek
+
+# testing tools
+held-out lettuce
+held-out betamax
+held-out doublex
+held-out expecter
+held-out sure
+held-out pyDoubles
+held-out nose-cov
+held-out xmlrunner
+
+# small web frameworks and extensions
+held-out hug
+held-out Flask-Markdown
+held-out Flask-Sijax
+held-out Flask-XML-RPC
+held-out bottle-cork
+held-out webassets
+held-out TurboGears2
+held-out Kajiki
+held-out bottle-sqlalchemy
+
+# old database layers
+held-out storm
+held-out MySQL-python
+held-out sqlsoup
+held-out records
+held-out ZODB3
+held-out durus
+held-out pysqlite
+held-out bsddb3
+
+# async, messaging and RPC
+held-out txredis
+held-out zerorpc
+held-out gevent-websocket
+held-out gevent-socketio
+held-out socketio-client
+held-out stompest
+held-out python-etcd
+held-out python-consul
+held-out msgpack-python
+held-out pyjsonrpc
+
+# devops
+held-out cuisine
+held-out paver
+held-out pip-accel
+
+# small domain libraries
+held-out translationstring
+held-out polib
+held-out pyisbn
+held-out pygeocoder
+held-out python-geohash
+held-out strict-rfc3339
+held-out colormath
+held-out colour
+held-out musicbrainzngs
+
+# old astronomy and data-format tools
+held-out pywcs
+held-out asciitable
+held-out atpy
+held-out pyephem

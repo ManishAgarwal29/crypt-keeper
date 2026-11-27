@@ -17,7 +17,8 @@
       "jsonschema",
       "pytz",
       "setuptools",
-      "six"
+      "six",
+      "werkzeug"
     ],
     "closure": [
       "aniso8601",
@@ -39,7 +40,7 @@
       "typing-extensions",
       "werkzeug"
     ],
-    "reviewed_on": "2026-11-25",
+    "reviewed_on": "2026-11-27",
     "skipped_non_plain_requirements": []
   },
   "hyper": {

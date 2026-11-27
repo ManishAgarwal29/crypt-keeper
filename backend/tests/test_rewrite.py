@@ -97,6 +97,8 @@ def test_attribute_use_without_a_safe_place_for_the_import_is_left_alone():
     ("import itertools\nx = itertools.izip(a, b)\n", "import itertools\nx = zip(a, b)\n"),
     ("import itertools\nx = list(itertools.imap(f, a))\n", "import itertools\nx = list(map(f, a))\n"),
     ("import itertools as it\nx = it.ifilter(f, a)\n", "import itertools as it\nx = filter(f, a)\n"),
+    ("import unittest\nr = unittest._TextTestResult\n", "import unittest\nr = unittest.TextTestResult\n"),
+    ("from unittest import _TextTestResult\n", "from unittest import TextTestResult as _TextTestResult\n"),
 ])
 def test_drop_in_renames(src, expected):
     out, _, manual = rw(src)

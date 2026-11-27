@@ -1,0 +1,109 @@
+# Fifth benchmark set, written AFTER the levers were finished (Python 2 conversion, removed-name ceilings, declared
+# imports, the unittest._TextTestResult rename) and BEFORE they were run on anything here. Never run through Crypt Keeper.
+#
+# Why a fifth list: the fourth list found two flaws in the Python 2 conversion (it fired on stray Python 2 files in tests
+# and examples, and it accepted output that parses but does not compile) and showed which libraries old packages forget
+# to declare. Those were fixed and added, so the fourth list is now a development result. This list is the clean one for
+# the final code: the code is not changed after it is run.
+#
+# Picked from memory as "old packages in families the earlier lists did not use": data validation and configuration,
+# filesystem and process tools, scraping and text, media, email and social APIs, caches, crypto, packaging tools, the
+# IPython-era support libraries and older test plugins. I did not look at their code or at how the tool does on them.
+#
+# The same written rule applies, and scripts/benchmark.py applies it, not me:
+#   * the latest release was uploaded before 2021-01-01, and
+#   * it has an sdist, and
+#   * at most 42 held-out packages are run: the first 42 that pass, in this order.
+#
+# Every candidate is recorded, including the ones the rule excludes. Names that PyPI does not know are excluded.
+
+# data validation and configuration
+held-out validictory
+held-out trafaret
+held-out yamlordereddictloader
+held-out hiyapyco
+held-out envparse
+held-out cmdln
+
+# filesystem and process tools
+held-out scandir
+held-out lockfile
+held-out pyinotify
+held-out pathtools
+held-out daemonize
+held-out subprocess32
+held-out trollius
+held-out asyncio
+
+# scraping and text
+held-out goose-extractor
+held-out stemming
+held-out langid
+held-out guess-language
+held-out tenjin
+
+# media and small desktop helpers
+held-out piexif
+held-out easygui
+held-out pyttsx
+
+# email, social and web APIs
+held-out python-instagram
+held-out slumber
+held-out soundcloud
+held-out pytumblr
+held-out mailchimp
+held-out flanker
+held-out marrow.mailer
+held-out envelopes
+
+# caches and small databases
+held-out shove
+held-out pydblite
+
+# science and logic
+held-out pydatalog
+held-out scikits.audiolab
+
+# older web helpers
+held-out pyramid_handlers
+
+# crypto and security
+held-out pycrypto
+held-out py-bcrypt
+held-out pbkdf2
+held-out gnupg
+held-out simple-crypt
+
+# packaging and developer tools
+held-out yolk
+held-out distribute
+held-out d2to1
+held-out ez_setup
+held-out pep8-naming
+held-out bumpversion
+held-out pychecker
+
+# the IPython-era support libraries
+held-out ipython-genutils
+held-out pickleshare
+held-out backcall
+held-out pyreadline
+held-out winpdb
+
+# older test plugins
+held-out nose-progressive
+held-out pytest-pythonpath
+held-out pytest-catchlog
+held-out pytest-cache
+held-out pytest-pep257
+
+# documents, PDFs and office files
+held-out docx
+held-out odfpy
+held-out fpdf
+
+# network helpers
+held-out pythonwhois
+held-out pyping
+held-out IPy

@@ -1,0 +1,1427 @@
+{
+ "run_date": "2026-11-26",
+ "results": {
+  "webapp2": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2012-09-28 (14.2 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`StringIO` is Python 2 only; use io.StringIO.",
+     "location": "tests/handler_test.py:6"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`StringIO` is Python 2 only; use io.StringIO.",
+     "location": "tests/request_test.py:2"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`string.lowercase` is Python 2 only; use string.ascii_lowercase.",
+     "location": "webapp2_extras/security.py:28"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`string.uppercase` is Python 2 only; use string.ascii_uppercase.",
+     "location": "webapp2_extras/security.py:29"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`string.lowercase` is Python 2 only; use string.ascii_lowercase.",
+     "location": "webapp2_extras/security.py:30"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`string.uppercase` is Python 2 only; use string.ascii_uppercase.",
+     "location": "webapp2_extras/security.py:31"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`string.letters` is Python 2 only; use string.ascii_letters.",
+     "location": "webapp2_extras/security.py:32"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`string.letters` is Python 2 only; use string.ascii_letters.",
+     "location": "webapp2_extras/security.py:33"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`string.letters` is Python 2 only; use string.ascii_letters.",
+     "location": "webapp2_extras/security.py:34"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 69: leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers); likely Python 2 code.",
+     "location": "tests/extras_i18n_test.py:69"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 571: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "webapp2.py:571"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 87: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "webapp2_extras/securecookie.py:87"
+    }
+   ]
+  },
+  "mongokit": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2014-02-16 (12.8 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`md5` is Python 2 only; use hashlib.",
+     "location": "tests/test_ext_mongodb_auth.py:47"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 98: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "ez_setup.py:98"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 239: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "mongokit/document.py:239"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 87: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "mongokit/migration.py:87"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 653: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "mongokit/schema_document.py:653"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 760: invalid decimal literal); likely Python 2 code.",
+     "location": "tests/test_api.py:760"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 71: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test_auth.py:71"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 191: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test_custom_types.py:191"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 46: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_descriptors.py:46"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 63: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test_gridfs.py:63"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 267: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_i18n.py:267"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 274: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_index.py:274"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 117: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test_json.py:117"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 380: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_migration.py:380"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 259: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_structure.py:259"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 62: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_types.py:62"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 96: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test_versioned.py:96"
+    }
+   ]
+  },
+  "pycassa": {
+   "liveness": "dead",
+   "truncated": true,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2017-01-17 (9.9 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`distutils` was removed in Python 3.12; use setuptools or packaging.",
+     "location": "ez_setup.py:24"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`cStringIO` is Python 2 only; use io.StringIO.",
+     "location": "pycassa/connection.py:2"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`collections.MutableMapping` was removed in Python 3.10; use collections.abc.MutableMapping.",
+     "location": "pycassa/contrib/stubs.py:12"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 508: Lambda expression parameters cannot be parenthesized); likely Python 2 code.",
+     "location": "pycassa/columnfamily.py:508"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 23: Lambda expression parameters cannot be parenthesized); likely Python 2 code.",
+     "location": "pycassa/columnfamilymap.py:23"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 135: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pycassa/pool.py:135"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 79: invalid hexadecimal literal); likely Python 2 code.",
+     "location": "pycassa/util.py:79"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 57: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "setup.py:57"
+    },
+    {
+     "kind": "pinned-dependency",
+     "severity": "medium",
+     "message": "'thrift' is hard-pinned to 0.9.3 and may block revival.",
+     "location": "thrift==0.9.3"
+    },
+    {
+     "kind": "python-support-gap",
+     "severity": "medium",
+     "message": "It declares Python up to 2.7 only, but the target is 3.12.",
+     "location": null
+    },
+    {
+     "kind": "truncated-source",
+     "severity": "medium",
+     "message": "The source exceeded the exhumer's size limits, so some files were not analysed.",
+     "location": null
+    }
+   ]
+  },
+  "pydns": {
+   "liveness": "dead",
+   "truncated": true,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2012-02-04 (14.8 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`distutils` was removed in Python 3.12; use setuptools or packaging.",
+     "location": "setup.py:10"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 84: invalid syntax); likely Python 2 code.",
+     "location": "DNS/Base.py:84"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 34: invalid syntax); likely Python 2 code.",
+     "location": "DNS/Class.py:34"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 29: invalid syntax); likely Python 2 code.",
+     "location": "DNS/Opcode.py:29"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 40: invalid syntax); likely Python 2 code.",
+     "location": "DNS/Status.py:40"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 115: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "DNS/win32dns.py:115"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 17: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test2.py:17"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 9: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test4.py:9"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 10: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/test5.py:10"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 155: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/testPackers.py:155"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 13: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/testsrv.py:13"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 22: inconsistent use of tabs and spaces in indentation); likely Python 2 code.",
+     "location": "tools/caching.py:22"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 27: inconsistent use of tabs and spaces in indentation); likely Python 2 code.",
+     "location": "tools/named-perf.py:27"
+    },
+    {
+     "kind": "truncated-source",
+     "severity": "medium",
+     "message": "The source exceeded the exhumer's size limits, so some files were not analysed.",
+     "location": null
+    }
+   ]
+  },
+  "pyexcelerator": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2009-04-12 (17.6 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`distutils` was removed in Python 3.12; use setuptools or packaging.",
+     "location": "setup.py:45"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 19: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/big-16Mb.py:19"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 18: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/big-35Mb.py:18"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 85: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/wsprops.py:85"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 19: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/xls2csv.py:19"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 17: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/xls2html.py:17"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 17: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/xls2txt.py:17"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 298: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "hrc/py-2.4-hrc.py:298"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 206: invalid hexadecimal literal); likely Python 2 code.",
+     "location": "pyExcelerator/BIFFRecords.py:206"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 119: invalid hexadecimal literal); likely Python 2 code.",
+     "location": "pyExcelerator/Cell.py:119"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 73: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "pyExcelerator/CompoundDoc.py:73"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 77: invalid syntax); likely Python 2 code.",
+     "location": "pyExcelerator/ExcelFormula.py:77"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 160: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "pyExcelerator/ExcelFormulaLexer.py:160"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 454: invalid decimal literal); likely Python 2 code.",
+     "location": "pyExcelerator/ExcelFormulaParser.py:454"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 334: invalid syntax); likely Python 2 code.",
+     "location": "pyExcelerator/ImportXLS.py:334"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 526: invalid hexadecimal literal); likely Python 2 code.",
+     "location": "pyExcelerator/Workbook.py:526"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 1589: invalid decimal literal); likely Python 2 code.",
+     "location": "pyExcelerator/antlr.py:1589"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 987: invalid hexadecimal literal); likely Python 2 code.",
+     "location": "tools/Analyzer.py:987"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 64: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tools/biff-dumper.py:64"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 50: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tools/compdoc-dumper.py:50"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 24: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tools/xls2csv-gerry.py:24"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 19: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tools/xls2csv.py:19"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 17: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tools/xls2html.py:17"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 17: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tools/xls2txt.py:17"
+    }
+   ]
+  },
+  "ClientForm": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2008-12-03 (18.0 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 71: cannot assign to True); likely Python 2 code.",
+     "location": "ClientForm.py:71"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 15: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/example.py:15"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 9: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "examples/simple.py:9"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 85: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "ez_setup.py:85"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 13: cannot assign to False); likely Python 2 code.",
+     "location": "setup.py:13"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 28: cannot assign to True); likely Python 2 code.",
+     "location": "test/test_clientform.py:28"
+    },
+    {
+     "kind": "python-support-gap",
+     "severity": "medium",
+     "message": "It declares Python up to 2.6 only, but the target is 3.12.",
+     "location": null
+    }
+   ]
+  },
+  "requests-oauth": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2012-06-21 (14.4 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`urlparse` is Python 2 only; use urllib.parse.",
+     "location": "oauth_hook/auth.py:5"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 93: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "oauth_hook/hook.py:93"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 111: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "tests/tests.py:111"
+    }
+   ]
+  },
+  "couchdbkit": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2013-08-30 (13.2 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`StringIO` is Python 2 only; use io.StringIO.",
+     "location": "couchdbkit/wsgi/handler.py:7"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`urlparse` is Python 2 only; use urllib.parse.",
+     "location": "couchdbkit/wsgi/proxy.py:6"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`distutils` was removed in Python 3.12; use setuptools or packaging.",
+     "location": "distribute_setup.py:22"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`imp` was removed in Python 3.12; use importlib.",
+     "location": "setup.py:6"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_changes.py:47"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_changes.py:49"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_changes.py:56"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_changes.py:84"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_changes.py:85"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_changes.py:89"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_changes.py:90"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:37"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:38"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:39"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:43"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:44"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:46"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:51"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:52"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:77"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:78"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:82"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_consumer.py:83"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:106"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:110"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:116"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:117"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:120"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:123"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:126"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:129"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:132"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:139"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:48"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:49"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:50"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:51"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:52"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:53"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:58"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:59"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:60"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:61"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:66"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:71"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:72"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:73"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:74"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:80"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:81"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:82"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:85"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:90"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:91"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:92"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_loaders.py:95"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_resource.py:34"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_resource.py:38"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_resource.py:40"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_resource.py:45"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`TestCase.assert_` was removed in Python 3.12; use assertTrue.",
+     "location": "tests/test_resource.py:48"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 428: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "couchdbkit/designer/fs.py:428"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 64: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "couchdbkit/designer/macros.py:64"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 103: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "couchdbkit/ext/django/loading.py:103"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 29: Missing parentheses in call to 'print'. Did you mean print(...)?); likely Python 2 code.",
+     "location": "couchdbkit/ext/django/testrunner.py:29"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 113: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "couchdbkit/resource.py:113"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 240: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "couchdbkit/schema/base.py:240"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 320: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "couchdbkit/schema/properties.py:320"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 198: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "couchdbkit/utils.py:198"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 529: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/client_test.py:529"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 723: leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers); likely Python 2 code.",
+     "location": "tests/test_schema.py:723"
+    },
+    {
+     "kind": "python-support-gap",
+     "severity": "medium",
+     "message": "It declares Python up to 2.7 only, but the target is 3.12.",
+     "location": null
+    },
+    {
+     "kind": "unmaintained-dependency",
+     "severity": "medium",
+     "message": "'restkit' has had no release since 2013-08-30.",
+     "location": "restkit>=4.2.2"
+    }
+   ]
+  },
+  "Flask-Triangle": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2013-11-04 (13.1 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`collections.Mapping` was removed in Python 3.10; use collections.abc.Mapping.",
+     "location": "flask_triangle/schema.py:79"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`collections.Mapping` was removed in Python 3.10; use collections.abc.Mapping.",
+     "location": "flask_triangle/schema.py:80"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`inspect.getargspec` was removed in Python 3.11; use inspect.getfullargspec or inspect.signature.",
+     "location": "flask_triangle/widget.py:287"
+    }
+   ]
+  },
+  "Flask-Autodoc": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2015-09-03 (11.2 years ago); the package is dead.",
+     "location": null
+    }
+   ]
+  },
+  "Flask-Classy": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2014-04-01 (12.7 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`inspect.getargspec` was removed in Python 3.11; use inspect.getfullargspec or inspect.signature.",
+     "location": "flask_classy.py:297"
+    },
+    {
+     "kind": "python-support-gap",
+     "severity": "medium",
+     "message": "The newest Python it declares is 3.3, 9 versions behind the target 3.12.",
+     "location": null
+    }
+   ]
+  },
+  "minimongo": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2012-10-31 (14.1 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 69: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "minimongo/config.py:69"
+    }
+   ]
+  },
+  "pysftp": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2016-07-06 (10.4 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "python-support-gap",
+     "severity": "medium",
+     "message": "The newest Python it declares is 3.5, 7 versions behind the target 3.12.",
+     "location": null
+    }
+   ]
+  },
+  "nose-testconfig": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2015-09-24 (11.2 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "python-support-gap",
+     "severity": "medium",
+     "message": "The newest Python it declares is 3.4, 8 versions behind the target 3.12.",
+     "location": null
+    }
+   ]
+  },
+  "nose-ignore-docstring": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2013-09-19 (13.2 years ago); the package is dead.",
+     "location": null
+    }
+   ]
+  },
+  "bottle-sqlite": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2020-10-03 (6.2 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`inspect.getargspec` was removed in Python 3.11; use inspect.getfullargspec or inspect.signature.",
+     "location": "bottle_sqlite.py:114"
+    }
+   ]
+  },
+  "ipcalc": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2016-01-19 (10.9 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`distutils` was removed in Python 3.12; use setuptools or packaging.",
+     "location": "setup.py:3"
+    }
+   ]
+  },
+  "Pylons": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2018-01-12 (8.9 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`inspect.getargspec` was removed in Python 3.11; use inspect.getfullargspec or inspect.signature.",
+     "location": "pylons/controllers/xmlrpc.py:169"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`xmlrpclib` is Python 2 only; use xmlrpc.client.",
+     "location": "pylons/controllers/xmlrpc.py:5"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`inspect.getargspec` was removed in Python 3.11; use inspect.getfullargspec or inspect.signature.",
+     "location": "pylons/decorators/cache.py:164"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`urlparse` is Python 2 only; use urllib.parse.",
+     "location": "pylons/decorators/secure.py:3"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`xmlrpclib` is Python 2 only; use xmlrpc.client.",
+     "location": "tests/test_units/__init__.py:6"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`xmlrpclib` is Python 2 only; use xmlrpc.client.",
+     "location": "tests/test_units/test_xmlrpc.py:6"
+    },
+    {
+     "kind": "deprecated-api",
+     "severity": "high",
+     "message": "`xmlrpclib` is Python 2 only; use xmlrpc.client.",
+     "location": "tests/test_webapps/filestotest/functional_controller_xmlrpc.py:2"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 79: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pylons/commands.py:79"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 108: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pylons/controllers/core.py:108"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 172: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pylons/controllers/jsonrpc.py:172"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 143: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pylons/decorators/__init__.py:143"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 22: invalid syntax); likely Python 2 code.",
+     "location": "pylons/error.py:22"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 165: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pylons/i18n/translation.py:165"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 98: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pylons/templates/default_project/ez_setup.py:98"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 98: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "pylons/templates/minimal_project/ez_setup.py:98"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 47: invalid syntax); likely Python 2 code.",
+     "location": "pylons/util.py:47"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 21: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "test_files/sample_controllers/controllers/i18nc.py:21"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 49: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_units/test_decorator_jsonify.py:49"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 73: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_webapps/filestotest/controller_sample.py:73"
+    },
+    {
+     "kind": "syntax-error",
+     "severity": "high",
+     "message": "Does not parse as Python 3 (line 40: multiple exception types must be parenthesized); likely Python 2 code.",
+     "location": "tests/test_webapps/filestotest/controller_sqlatest.py:40"
+    },
+    {
+     "kind": "unmaintained-dependency",
+     "severity": "medium",
+     "message": "'PasteDeploy' has had no release since 2023-11-21.",
+     "location": "PasteDeploy (>=1.5.0)"
+    },
+    {
+     "kind": "unmaintained-dependency",
+     "severity": "medium",
+     "message": "'Routes' has had no release since 2020-10-14.",
+     "location": "Routes (>=1.12.3)"
+    },
+    {
+     "kind": "unmaintained-dependency",
+     "severity": "medium",
+     "message": "'WebError' has had no release since 2016-04-10.",
+     "location": "WebError (>=0.10.3)"
+    },
+    {
+     "kind": "unmaintained-dependency",
+     "severity": "medium",
+     "message": "'WebHelpers' has had no release since 2011-03-24.",
+     "location": "WebHelpers (>=0.6.4)"
+    },
+    {
+     "kind": "unmaintained-dependency",
+     "severity": "medium",
+     "message": "'nose' has had no release since 2015-06-02.",
+     "location": "nose (>=1.1.2)"
+    }
+   ]
+  },
+  "Flask-MongoAlchemy": {
+   "liveness": "dead",
+   "truncated": false,
+   "findings": [
+    {
+     "kind": "abandoned-package",
+     "severity": "high",
+     "message": "Last released 2015-06-03 (11.5 years ago); the package is dead.",
+     "location": null
+    },
+    {
+     "kind": "pinned-dependency",
+     "severity": "medium",
+     "message": "'MongoAlchemy' is hard-pinned to 0.19 and may block revival.",
+     "location": "MongoAlchemy==0.19"
+    },
+    {
+     "kind": "pinned-dependency",
+     "severity": "medium",
+     "message": "'pymongo' is hard-pinned to 2.8.1 and may block revival.",
+     "location": "pymongo==2.8.1"
+    },
+    {
+     "kind": "unmaintained-dependency",
+     "severity": "medium",
+     "message": "'MongoAlchemy' has had no release since 2015-11-13.",
+     "location": "MongoAlchemy==0.19"
+    }
+   ]
+  }
+ }
+}

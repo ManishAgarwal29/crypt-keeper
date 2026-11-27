@@ -1,6 +1,7 @@
 # Product: Crypt Keeper
 
-Crypt Keeper revives abandoned Python packages. It is a Kiroween 2026 submission in the
+Crypt Keeper diagnoses why an abandoned Python package no longer runs on modern Python, and revives it
+where it safely can. It is a Kiroween 2026 submission in the
 **Frankenstein** category — stitching together PyPI/GitHub archaeology, AST-based static
 analysis, source-preserving code rewriting, and sandboxed execution into one app that brings
 dead code back to life. The Coroner and Necromancer are deterministic, not LLM-driven, so every

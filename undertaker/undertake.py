@@ -65,7 +65,9 @@ def triage_package(name: str, target: str, client: httpx.Client, today: date) ->
     """Exhume, diagnose, revive and triage one package. Raises ExhumeError if it cannot be fetched."""
     snapshot = exhume_pypi(name, target, client)
     report = run_autopsy(snapshot, target, today)
-    revival = revive(snapshot, report)
+    # Python 2 conversion is mechanical and unproven until the package runs. The Undertaker only reads, so it must not
+    # call a Python 2 package "revivable" on the strength of a conversion it never ran.
+    revival = revive(snapshot, report, convert_python2=False)
     revived_report = run_autopsy(revived_snapshot(snapshot, revival), target, today)
     return triage(report, revival, revived_report, snapshot.last_release_date, today.isoformat())
 

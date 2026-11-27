@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from models import PackageSnapshot, ProofOfLife
+from proof.policy import is_public
 from proof.discovery import (
     CONFIG_FILENAME,
     RESULT_FILENAME,
@@ -52,6 +53,7 @@ from proof.discovery import (
 )
 
 ENABLE_ENV = "CRYPT_KEEPER_PROOF_OF_LIFE"
+SOURCE_BUILDS_ENV = "CRYPT_KEEPER_ALLOW_SOURCE_BUILDS"
 MAX_FILES = 2000
 MAX_TOTAL_BYTES = 10_000_000
 VENV_TIMEOUT = 180
@@ -372,7 +374,29 @@ def _install(py: str, reqs: list[str], cwd: Path, home: Path, log: list[str], de
         if not ok:
             failed.append(req)
     log.append(f"Could not install (wheel-only): {failed}")
+    if failed and source_builds_allowed():
+        # Opt-in, local only: building from source runs the dependency's own setup.py on this machine.
+        source = [py, "-m", "pip", "install", "--prefer-binary", "--no-input", "--disable-pip-version-check", "--quiet", "--"]
+        built: list[str] = []
+        for req in list(failed):
+            try:
+                ok = step(source + [req], cwd, env, SINGLE_INSTALL_TIMEOUT).returncode == 0
+            except OutOfTime:
+                break
+            if ok:
+                built.append(req)
+                failed.remove(req)
+        log.append(f"Built from source because {SOURCE_BUILDS_ENV} is on (their setup.py ran): {built or 'none'}; "
+                   f"still not installed: {failed or 'none'}")
     return failed
+
+
+def source_builds_allowed() -> bool:
+    """Whether a dependency with no wheel may be built from source (running its setup.py). Off unless explicitly on,
+    and never on a public host, whatever the variable says: that would run any dependency's build script for strangers."""
+    if is_public(os.environ.get("CRYPT_KEEPER_PUBLIC")):
+        return False
+    return os.environ.get(SOURCE_BUILDS_ENV, "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _tail(text: str, limit: int = LOG_TAIL) -> str:
