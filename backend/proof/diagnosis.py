@@ -108,8 +108,9 @@ def diagnose(proof: ProofOfLife | None, paths: list[str]) -> FailureHint | None:
         if site:
             return FailureHint(
                 category="dependency-removed-a-name", summary=_quote(error),
-                next_step=f"A newer release of `{module.split('.', 1)[0]}` removed `{name}`. Pin it to an older release "
-                          f"(`pip install \"{module.split('.', 1)[0]}<X\"`), or change the code to its replacement.",
+                next_step=f"A newer release of `{module.split('.', 1)[0]}` removed `{name}`. Change the code to its "
+                          f"replacement, or pin `{module.split('.', 1)[0]}` to an older release if one installs on this "
+                          "Python (old releases of compiled libraries often do not).",
             )
         return FailureHint(
             category="removed-from-python", summary=_quote(error),
@@ -120,8 +121,9 @@ def diagnose(proof: ProofOfLife | None, paths: list[str]) -> FailureHint | None:
         module, name = match.group(1), match.group(2)
         return FailureHint(
             category="attribute-removed", summary=_quote(error),
-            next_step=f"`{module}.{name}` no longer exists. If `{module}` is a dependency, pin it to an older release; if it is "
-                      "the standard library, use its replacement.",
+            next_step=f"`{module}.{name}` no longer exists. If `{module}` is a dependency, change the code to its replacement, "
+                      "or pin it to an older release if one installs on this Python; if it is the standard library, use "
+                      "its replacement.",
         )
     if "timed out" in error:
         return FailureHint(category="timed-out", summary=_quote(error),

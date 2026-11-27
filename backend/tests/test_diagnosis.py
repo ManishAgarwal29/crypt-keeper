@@ -40,6 +40,20 @@ def test_each_real_failure_gets_its_cause_and_a_next_step(error, paths, category
     assert hint.summary in error or error.startswith(hint.summary[:-3])
 
 
+@pytest.mark.parametrize("error", [
+    f"ImportError: cannot import name 'soft_unicode' from 'markupsafe' ({SITE}/markupsafe/__init__.py)",
+    "AttributeError: module 'pymongo' has no attribute 'Connection'",
+])
+def test_pinning_is_only_suggested_with_the_condition_that_an_older_release_installs(error):
+    """The rule cannot know whether an old release installs on this Python (no old MarkupSafe does on 3.12), so the
+    advice leads with changing the code and keeps the condition on pinning."""
+    step = diagnose(dead(error), []).next_step
+    assert "if one installs on this Python" in step
+    lowered = step.lower()
+    assert lowered.index("change the code") < lowered.index("pin"), "changing the code is the advice that always applies"
+    assert "<X" not in step, "no placeholder version"
+
+
 def test_a_windows_path_to_site_packages_is_recognised_too():
     error = r"ImportError: cannot import name 'DSSKey' from 'paramiko' (C:\x\venv\Lib\site-packages\paramiko\__init__.py)"
     assert diagnose(dead(error), []).category == "dependency-removed-a-name"
