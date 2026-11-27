@@ -5,7 +5,6 @@
 docs
 mcp-server
 scripts
-Overview.md
 README.md
 **/__pycache__
 **/*.pyc

@@ -1,8 +1,8 @@
 # How Kiro built Crypt Keeper
 
-Crypt Keeper was built in the Kiro IDE over one long session, from an empty folder to a working
-app: about 3,300 lines of backend code, 3,900 lines of tests (about 970 tests, 50 of them
-property-based), 590 lines of scripts, and an 830-line UI with no dependencies.
+Crypt Keeper was built in the Kiro IDE over a few long sessions, from an empty folder to a working
+app: about 4,000 lines of backend code, 4,700 lines of tests (about 1,130 tests, 56 of them
+property-based), 790 lines of scripts, and an 820-line UI with no dependencies.
 
 This page says what each Kiro feature did for the project, including where it did not help.
 
