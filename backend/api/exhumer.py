@@ -12,6 +12,7 @@ import os
 import ast
 import re
 import tarfile
+import time
 import tokenize
 import tomllib
 import zipfile
@@ -39,6 +40,18 @@ MAX_ARCHIVE_ENTRIES = 20_000  # headers in one archive
 MAX_ARCHIVE_UNPACKED = 250_000_000  # sum of the sizes the headers claim
 MAX_ZIP_DIRECTORY = 8_000_000  # bytes of zip central directory
 MAX_DEP_LOOKUPS = 25
+# The whole exhumation has one time budget. Each network read already has a timeout, but a source that trickles a few
+# bytes at a time, or 25 slow dependency lookups, could otherwise hold a request open for a very long time.
+MAX_EXHUME_SECONDS = 120
+_now = time.monotonic  # replaced in tests
+
+
+def _out_of_time(deadline: float | None) -> bool:
+    return deadline is not None and _now() > deadline
+
+
+def _too_slow(what: str) -> ExhumeError:
+    return ExhumeError(f"The crypt is too slow to open: {what} took longer than {MAX_EXHUME_SECONDS} s. Try again later.", 504)
 
 _METADATA_NAMES = {"requires.txt", "PKG-INFO", "pyproject.toml", "setup.cfg", "setup.py"}
 _PYPI_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -476,7 +489,7 @@ def _json(resp: httpx.Response, what: str) -> dict:
     return data
 
 
-def _download(client: httpx.Client, url: str, limit: int = MAX_ARCHIVE_BYTES) -> bytes:
+def _download(client: httpx.Client, url: str, limit: int = MAX_ARCHIVE_BYTES, deadline: float | None = None) -> bytes:
     if not url.startswith("https://"):
         raise ExhumeError("Refusing to download source from a non-HTTPS URL.", 422)
     buf = bytearray()
@@ -488,6 +501,8 @@ def _download(client: httpx.Client, url: str, limit: int = MAX_ARCHIVE_BYTES) ->
                 buf += chunk
                 if len(buf) > limit:
                     raise ExhumeError("The corpse is too large to exhume (archive size limit).", 413)
+                if _out_of_time(deadline):
+                    raise _too_slow("downloading the source")
     except httpx.HTTPError as exc:
         raise ExhumeError(f"The crypt is unreachable (source download): {exc.__class__.__name__}.", 502) from exc
     return bytes(buf)
@@ -505,15 +520,18 @@ def fetch_pypi_metadata(name: str, client: httpx.Client) -> PyPIMetadata:
 
 
 def fetch_dependency_info(
-    deps: list[str], target_python: str, client: httpx.Client
+    deps: list[str], target_python: str, client: httpx.Client, deadline: float | None = None
 ) -> dict[str, DependencyInfo]:
     """Look up PyPI facts for each dependency. Failures skip that dependency.
 
     Python support is judged from the dependency's latest release, so it is an
-    approximation when the package pins an older version.
+    approximation when the package pins an older version. Past `deadline` the remaining
+    dependencies are not looked up: they get no facts, which the Coroner reads as unknown.
     """
     info: dict[str, DependencyInfo] = {}
     for raw in deps[:MAX_DEP_LOOKUPS]:
+        if _out_of_time(deadline):
+            break
         try:
             name = Requirement(raw).name
             meta = fetch_pypi_metadata(name, client)
@@ -528,12 +546,13 @@ def fetch_dependency_info(
 
 
 def exhume_pypi(name: str, target_python: str, client: httpx.Client) -> PackageSnapshot:
+    deadline = _now() + MAX_EXHUME_SECONDS
     meta = fetch_pypi_metadata(name, client)
     source_map: dict[str, str] = {}
     truncated = False
     dependencies = meta.dependencies
     if meta.sdist_url:
-        archive = extract_archive(_download(client, meta.sdist_url), meta.sdist_url.rsplit("/", 1)[-1])
+        archive = extract_archive(_download(client, meta.sdist_url, deadline=deadline), meta.sdist_url.rsplit("/", 1)[-1])
         source_map, truncated = archive.py_files, archive.truncated
         # Older releases often have no `requires_dist` on PyPI; the sdist's own metadata does.
         if not dependencies:
@@ -543,7 +562,7 @@ def exhume_pypi(name: str, target_python: str, client: httpx.Client) -> PackageS
         last_release_date=meta.last_release_date,
         declared_pythons=meta.declared_pythons,
         dependencies=dependencies,
-        dependency_info=fetch_dependency_info(dependencies, target_python, client),
+        dependency_info=fetch_dependency_info(dependencies, target_python, client, deadline),
         source_map=source_map,
         truncated=truncated,
     )
@@ -552,6 +571,7 @@ def exhume_pypi(name: str, target_python: str, client: httpx.Client) -> PackageS
 def exhume_github(
     url: str, target_python: str, client: httpx.Client, token: str | None = None
 ) -> PackageSnapshot:
+    deadline = _now() + MAX_EXHUME_SECONDS
     m = _GITHUB_URL_RE.fullmatch((url or "").strip())
     if not m:
         raise ExhumeError(f"'{url}' is not a GitHub repository URL (https://github.com/owner/repo).", 422)
@@ -584,6 +604,8 @@ def exhume_github(
     )[:MAX_GITHUB_FILES]
 
     def raw(path: str) -> str | None:
+        if _out_of_time(deadline):
+            return None  # out of time: the file is left out and the snapshot is marked truncated
         resp = _get(client, f"{GITHUB_RAW}/{owner}/{repo}/{quote(branch, safe='')}/{quote(path)}", "GitHub raw")
         return resp.text if resp.status_code == 200 else None
 
@@ -599,7 +621,7 @@ def exhume_github(
         ref=PackageRef(source=Source.github, identifier=f"https://github.com/{owner}/{repo}"),
         last_release_date=pushed_at[:10] if pushed_at else None,
         dependencies=deps,
-        dependency_info=fetch_dependency_info(deps, target_python, client),
+        dependency_info=fetch_dependency_info(deps, target_python, client, deadline),
         source_map=source_map,
         truncated=truncated,
     )

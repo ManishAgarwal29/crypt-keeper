@@ -13,8 +13,11 @@ def _clean_policy_environment(monkeypatch):
     monkeypatch.delenv("CRYPT_KEEPER_PROOF_ALLOWLIST", raising=False)
     monkeypatch.delenv("CRYPT_KEEPER_PUBLIC", raising=False)
     # Also settings that switch the sandbox off or resize it: a variable left in the shell must not decide a test.
-    for name in ("CRYPT_KEEPER_PROOF_OF_LIFE", "CRYPT_KEEPER_CHILD_MEM_MB", "CRYPT_KEEPER_ALLOW_SOURCE_BUILDS"):
+    for name in ("CRYPT_KEEPER_PROOF_OF_LIFE", "CRYPT_KEEPER_CHILD_MEM_MB", "CRYPT_KEEPER_ALLOW_SOURCE_BUILDS", "CRYPT_KEEPER_TRUSTED_PROXY_HOPS"):
         monkeypatch.delenv(name, raising=False)
+    # The app is shared by every test, and tests that post in public mode would add up to the public default limit.
+    # The rate-limit tests set this themselves.
+    monkeypatch.setenv("CRYPT_KEEPER_RATE_LIMIT", "off")
 
 # The property tests check logic, not speed. Hypothesis's `too_slow` health check and per-example
 # deadline fire on a busy machine (the suite also builds virtualenvs) without any real defect,

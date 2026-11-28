@@ -9,6 +9,9 @@ Written as plain ASGI middleware so the app never buffers more than one chunk pa
 """
 from __future__ import annotations
 
+import re
+import time
+from collections import OrderedDict, deque
 from collections.abc import Callable
 
 from fastapi import HTTPException
@@ -74,3 +77,106 @@ class BodyLimitMiddleware:
             return message
 
         await self.app(scope, counting_receive, send)
+
+
+# --- per-client rate limit -------------------------------------------------------------------------------------------
+
+RATE_LIMIT_ENV = "CRYPT_KEEPER_RATE_LIMIT"
+PROXY_HOPS_ENV = "CRYPT_KEEPER_TRUSTED_PROXY_HOPS"
+# 30 costly requests per client per 10 minutes on a public host. The smoke test alone makes about 12, and judges behind
+# one office address share a limit, so it is set well above what one person clicking through the demo needs (about 8).
+DEFAULT_PUBLIC_RATE = (30, 600.0)
+MAX_TRACKED_CLIENTS = 10_000
+# Requests that fetch from PyPI or GitHub, or run code. Reads of the UI, /health and the status are never limited.
+LIMITED_PATHS = frozenset({"/revive", "/revive/stream", "/revive/export", "/proof-of-life", "/exhume", "/autopsy", "/resurrect"})
+RATE_LIMITED = "The crypt needs rest: too many requests from your address. Try again in {seconds} s."
+_RATE = re.compile(r"\s*(\d+)\s*/\s*(\d+)\s*")
+
+
+def parse_rate(raw: str | None, public: bool) -> tuple[int, float] | None:
+    """(requests, window seconds), or None for no limit. Read from CRYPT_KEEPER_RATE_LIMIT, e.g. `20/600`.
+
+    Fails closed on a public host: a missing or malformed value means the default limit, never "unlimited". Only an
+    explicit `off` turns it off there. A local run has no limit unless one is set.
+    """
+    text = (raw or "").strip().lower()
+    if text in ("off", "0", "none"):
+        return None
+    match = _RATE.fullmatch(text)
+    if match and int(match.group(1)) > 0 and int(match.group(2)) > 0:
+        return int(match.group(1)), float(match.group(2))
+    return DEFAULT_PUBLIC_RATE if public else None
+
+
+def proxy_hops(raw: str | None) -> int:
+    """How many proxies in front of the app append to X-Forwarded-For. Default 1 (Azure, Cloud Run); never negative."""
+    try:
+        return max(0, int((raw or "1").strip()))
+    except ValueError:
+        return 1
+
+
+def client_key(headers: list[tuple[bytes, bytes]], peer: str | None, behind_proxy: bool, hops: int = 1) -> str:
+    """Who is asking. Behind a proxy, the address the proxy added: X-Forwarded-For counted `hops` from the right.
+
+    The left of X-Forwarded-For is whatever the client sent, so it can be anything; only what the host's own proxy
+    appended can be trusted. Without a proxy, the TCP peer. A header with fewer entries than `hops` falls back to the
+    peer, so a client cannot pick its own key by sending a short header.
+    """
+    if behind_proxy and hops > 0:
+        values = [v.decode("latin-1") for n, v in headers if n.lower() == b"x-forwarded-for"]
+        entries = [e.strip() for e in ",".join(values).split(",") if e.strip()]
+        if len(entries) >= hops:
+            return entries[-hops]
+    return peer or "unknown"
+
+
+class SlidingWindow:
+    """Requests per key in the last `window` seconds. Bounded: the least recently seen keys are forgotten first."""
+
+    def __init__(self, limit: int, window: float, max_keys: int = MAX_TRACKED_CLIENTS) -> None:
+        self.limit, self.window, self.max_keys = limit, window, max_keys
+        self.hits: OrderedDict[str, deque[float]] = OrderedDict()
+
+    def hit(self, key: str, now: float) -> float | None:
+        """Record a request. Returns None if it is allowed, else the seconds until the next one would be."""
+        times = self.hits.pop(key, None) or deque()
+        while times and times[0] <= now - self.window:
+            times.popleft()
+        if len(times) >= self.limit:
+            self.hits[key] = times
+            return max(1.0, times[0] + self.window - now)
+        times.append(now)
+        self.hits[key] = times
+        while len(self.hits) > self.max_keys:
+            self.hits.popitem(last=False)
+        return None
+
+
+class RateLimitMiddleware:
+    """Plain ASGI. Limits the costly POSTs per client; reads the settings on every request so tests can change them."""
+
+    def __init__(self, app: ASGIApp, settings: Callable[[], tuple[tuple[int, float] | None, bool, int]],
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.app, self.settings, self.clock = app, settings, clock
+        self.window: SlidingWindow | None = None
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] in SAFE_METHODS or scope["path"] not in LIMITED_PATHS:
+            await self.app(scope, receive, send)
+            return
+        rate, behind_proxy, hops = self.settings()
+        if rate is None:
+            await self.app(scope, receive, send)
+            return
+        if self.window is None or (self.window.limit, self.window.window) != rate:
+            self.window = SlidingWindow(*rate)
+        peer = (scope.get("client") or (None,))[0]
+        wait = self.window.hit(client_key(scope["headers"], peer, behind_proxy, hops), self.clock())
+        if wait is None:
+            await self.app(scope, receive, send)
+            return
+        seconds = int(wait + 0.999)
+        response = JSONResponse({"detail": RATE_LIMITED.format(seconds=seconds)}, status_code=429,
+                                headers={"Retry-After": str(seconds)})
+        await response(scope, receive, send)

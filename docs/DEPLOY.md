@@ -60,9 +60,17 @@ Other things to know:
   process count and address space (3 GB of virtual memory, not resident memory;
   `CRYPT_KEEPER_CHILD_MEM_MB`, `0` turns it off). A large package may need the limit raised. Processes
   a package leaves behind are killed after each step.
-- **Not done:** a per-IP rate limit (cost and load are bounded by `--max-instances`, the slot limit
-  `CRYPT_KEEPER_MAX_PROOFS` and the exhume limit `CRYPT_KEEPER_MAX_EXHUMES`), and running the child as a
-  different user from the app. Acceptable for a short demo and worth doing before a real launch.
+- **Each client is rate limited.** On a public host, a client may make 30 costly requests (`/revive`, `/revive/stream`,
+  `/revive/export`, `/proof-of-life`, `/exhume`, `/autopsy`, `/resurrect`) per 10 minutes; more get a 429 with
+  `Retry-After`. Reads (the page, `/health`, the status) are never limited. The client is the address the host's own proxy
+  appended to `X-Forwarded-For` (`CRYPT_KEEPER_TRUSTED_PROXY_HOPS` from the right, default 1), because anything to its left
+  was sent by the client and can be anything. A missing or malformed `CRYPT_KEEPER_RATE_LIMIT` means the default limit;
+  only `off` turns it off. **Check after deploying** that it keys on the real address: see "Check the rate limit" below.
+- **A whole request has a time budget.** Downloading the source and looking up its dependencies have 120 s together
+  (a source that trickles in is stopped with a 504); running the package has its 600 s; the retry with the original
+  dependencies only starts if a whole run still fits in 900 s, the host's request timeout.
+- **Not done:** running the sandboxed child as a different user from the app. Cost and load are also bounded by
+  `--max-instances`, the slot limit `CRYPT_KEEPER_MAX_PROOFS` and the exhume limit `CRYPT_KEEPER_MAX_EXHUMES`.
 
 ## What was and was not tested
 
@@ -181,6 +189,8 @@ bills continuously, so check the price and remove it afterwards.
 | `CRYPT_KEEPER_MAX_PROOFS` | `4` | Concurrent sandbox runs. A `/revive` uses two. |
 | `CRYPT_KEEPER_MAX_EXHUMES` | `8` | Concurrent downloads and unpackings. Each holds an archive in memory. |
 | `CRYPT_KEEPER_CHILD_MEM_MB` | `3072` | Address-space limit for each sandboxed process (Linux). `0` disables it. |
+| `CRYPT_KEEPER_RATE_LIMIT` | `30/600` on a public host, none locally | Costly requests per client per window, as `requests/seconds`. Missing or malformed on a public host means the default; only `off` disables it. |
+| `CRYPT_KEEPER_TRUSTED_PROXY_HOPS` | `1` | How many proxies append to `X-Forwarded-For` in front of the app. The client is that many entries from the right. |
 | `CRYPT_KEEPER_ALLOW_SOURCE_BUILDS` | off | Local use only: build a dependency with no wheel from source (runs its `setup.py`). Ignored while `CRYPT_KEEPER_PUBLIC` is on, so it cannot be switched on for a public host by mistake. |
 
 To change one after deploying (the allowlist contains commas, so use gcloud's alternate delimiter;
@@ -201,6 +211,8 @@ gcloud run services update crypt-keeper --region us-central1 --update-env-vars C
 | Stages do not tick; everything appears at the end | The response is being buffered. The result is still correct. |
 | A run fails or the instance restarts | Out of memory. Raise `--memory` or lower `--concurrency`. |
 | `503 The crypt is busy` | All sandbox or exhume slots are in use. Wait, or raise `CRYPT_KEEPER_MAX_PROOFS` and memory together. |
+| `429 The crypt needs rest` | One client made more than the limit of costly requests. Wait for `Retry-After`, or raise `CRYPT_KEEPER_RATE_LIMIT`. |
+| `504 The crypt is too slow to open` | PyPI or GitHub took more than 120 s to send the package. Usually temporary; try again. |
 | A listed package shows "dependencies have not been reviewed" | Its dependencies changed, or it has no entry in `approved_dependencies.json`. Run `scripts/review_dependencies.py PACKAGE`, read the output, then `--write` and rebuild. |
 | Every verdict reads "Proof of life is not enabled for any package" | The allow-list is missing or blank, and the service is failing closed on purpose. Set `CRYPT_KEEPER_PROOF_ALLOWLIST` again (see the command above). |
 | `413 ... too large to exhume` | The package's source archive is over a limit (20 MB download, 20,000 entries or 250 MB unpacked). It is refused whole, not partly analysed. |
@@ -250,6 +262,19 @@ Notes:
 - To ship a new version: `az acr build ... -t crypt-keeper:v2 --no-logs .`, wait for it, then
   `az containerapp update -n crypt-keeper -g crypt-keeper-rg --image <registry>.azurecr.io/crypt-keeper:v2`.
 
+### Check the rate limit
+
+The limit has to key on the client's real address, which depends on how the host's proxy fills `X-Forwarded-For`. After
+deploying, wait 10 minutes after the smoke test, then send 31 requests with a different made-up address on the left each
+time; the 31st must still be refused:
+
+```powershell
+$u = "https://<your-app>"
+1..31 | % { try { (Invoke-WebRequest "$u/autopsy" -Method Post -ContentType application/json -Headers @{ Origin = $u; "X-Forwarded-For" = "10.0.0.$_" } -Body '{"ref":{"source":"pypi","identifier":"x"}}' -UseBasicParsing).StatusCode } catch { $_.Exception.Response.StatusCode.value__ } }
+```
+
+If the 31st is not 429, the proxy adds more than one entry: set `CRYPT_KEEPER_TRUSTED_PROXY_HOPS` accordingly.
+
 ## Fly.io (alternative, not tested)
 
 Fly builds the same `Dockerfile`. Roughly: install `flyctl`, run `fly launch --no-deploy` in the
@@ -268,7 +293,7 @@ python scripts/smoke_test.py http://127.0.0.1:8080
 ## Not done
 
 - A recorded-run fallback (replaying saved results if the live host is down).
-- Per-IP rate limiting, and running the sandboxed child as a separate user.
+- Running the sandboxed child as a separate user.
 - Hash-pinned dependencies for the listed packages (their transitive dependencies are not reviewed).
 - Running arbitrary packages safely for the public. That needs real isolation per run, such as
   [Cloud Run sandboxes](https://docs.cloud.google.com/run/docs/code-execution) (Preview) or a remote

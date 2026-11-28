@@ -91,6 +91,13 @@ project. Do not weaken one without replacing its protection and its test.
   `HTTPException` from inside the request stream.
 - Unexpected errors return a generic message and are logged, never echoed to the client.
 - Sandbox runs go through `_run_proof` so the slot limit applies.
+- **Costly requests are rate limited per client** by `RateLimitMiddleware` (plain ASGI, outermost, so a refused client is answered
+  before anything reads its request). On a public host it keys on the address the host's proxy appended to `X-Forwarded-For`,
+  never the left of that header, which the client controls; a missing or malformed setting means the default limit, only `off`
+  disables it. Reads and CORS preflights are never limited. Every POST route must be in `LIMITED_PATHS` (a test checks).
+- **A whole request has a time budget.** The exhume has `MAX_EXHUME_SECONDS` across download and lookups, the sandbox its
+  `TOTAL_BUDGET`, and the retry only starts if a whole run still fits in `REQUEST_BUDGET_SECONDS`. Never add a network call or a
+  second sandbox run outside these budgets.
 
 ## When you change any of this
 Update or add the matching tests in `tests/test_sandbox.py`, `tests/test_proof_discovery.py`,

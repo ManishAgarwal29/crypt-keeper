@@ -138,6 +138,9 @@ A dependency with no wheel for the target Python is not installed, because build
 `setup.py`. On your own machine you can allow that with `CRYPT_KEEPER_ALLOW_SOURCE_BUILDS=1`: the log then lists
 which dependencies were built. It is ignored on a public host (`CRYPT_KEEPER_PUBLIC`), whatever it is set to.
 
+On a public host each client may make 30 costly requests per 10 minutes (`CRYPT_KEEPER_RATE_LIMIT`), and a whole request
+has a time budget, so one slow source or one busy visitor cannot hold the server.
+
 The API rejects cross-origin and non-JSON POSTs and unknown Host headers, so another website
 cannot make your browser send code to a local Crypt Keeper. Configure with
 `CRYPT_KEEPER_ALLOWED_ORIGINS` and `CRYPT_KEEPER_ALLOWED_HOSTS`.

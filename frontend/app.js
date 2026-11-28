@@ -66,6 +66,15 @@ function toNodes(children) {
     .map((child) => (child.nodeType ? child : document.createTextNode(String(child))));
 }
 
+// Messages from the backend mark names with backticks (`collections.abc`). Show those parts as code. The pieces are
+// text nodes inside <code> elements, never HTML, so a package's own text still cannot inject markup. An unpaired
+// backtick means the text is not marked up this way, so it is shown as it is.
+function codeText(text) {
+  const parts = String(text ?? "").split("`");
+  if (parts.length < 3 || parts.length % 2 === 0) return [String(text ?? "")];
+  return parts.map((part, i) => (i % 2 ? el("code", { text: part }) : part)).filter((part) => part !== "");
+}
+
 function fill(node, ...children) {
   node.replaceChildren(...toNodes(children));
   return node;
@@ -288,13 +297,13 @@ function renderVerdict(data) {
   fill(section,
     el("span", { class: "verdict-icon" }, icon(info.icon)),
     el("h2", { id: "verdict-heading", text: info.title }),
-    el("p", { class: "reason", text: data.verdict_reason }),
+    el("p", { class: "reason" }, codeText(data.verdict_reason)),
     mismatch && el("p", { class: "callout", role: "note" },
       el("strong", { text: "Check this on the right Python. " }),
       `Python ${data.autopsy.target_python} is not installed on this machine, so the check ran on ${after.python_used}. ` +
       `A package that works there can still fail on ${data.autopsy.target_python}. Install it for a real verdict.`),
     data.failure_hint && el("p", { class: "callout hint", role: "note" },
-      el("strong", { text: "What to try next: " }), data.failure_hint.next_step,
+      el("strong", { text: "What to try next: " }), codeText(data.failure_hint.next_step),
       el("span", { class: "hint-category", text: ` (read from the error; rule: ${data.failure_hint.category})` })),
     el("p", { class: "subject" },
       el("strong", { text: data.package.identifier }),
@@ -341,7 +350,7 @@ function renderAutopsy(data) {
 function findingGroup(kind, list, open) {
   const worst = list.reduce((w, f) => (SEVERITY_RANK[f.severity] < SEVERITY_RANK[w] ? f.severity : w), "low");
   const items = list.map((f) =>
-    el("li", {}, f.message, f.location && el("code", { class: "where", text: f.location })));
+    el("li", {}, codeText(f.message), f.location && el("code", { class: "where", text: f.location })));
   const shown = items.slice(0, FINDINGS_SHOWN);
   const rest = items.slice(FINDINGS_SHOWN);
   const ul = el("ul", { class: "finding-list" }, shown);
@@ -381,11 +390,11 @@ function renderResurrection(data) {
     ],
     revival.applied.length > 0 && el("details", {},
       el("summary", {}, el("strong", { text: "What the Necromancer did" }), el("span", { class: "count", text: plural(revival.applied.length, "change") })),
-      el("ul", { class: "finding-list" }, revival.applied.slice(0, 100).map((a) => el("li", { text: a })))),
+      el("ul", { class: "finding-list" }, revival.applied.slice(0, 100).map((a) => el("li", {}, codeText(a))))),
     revival.manual_items.length > 0 && el("details", { class: "manual" },
       el("summary", {}, el("span", { class: "badge sev-medium", text: "manual" }), el("strong", { text: "Needs a human" }),
         el("span", { class: "count", text: plural(revival.manual_items.length, "item") })),
-      el("ul", { class: "finding-list" }, revival.manual_items.slice(0, 100).map((m) => el("li", { text: m })))),
+      el("ul", { class: "finding-list" }, revival.manual_items.slice(0, 100).map((m) => el("li", {}, codeText(m))))),
     (revival.diffs.length > 0 || depChanges.length > 0) && downloadBlock(),
     revival.diffs.length > 0 && [
       el("h3", { text: "Before and after" }),

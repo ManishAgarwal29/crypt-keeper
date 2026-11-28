@@ -28,7 +28,15 @@ from pydantic import BaseModel
 
 from api.exhumer import ExhumeError, exhume
 from api.guards import RequestGuardMiddleware
-from api.limits import BodyLimitMiddleware
+from api.limits import (
+    PROXY_HOPS_ENV,
+    RATE_LIMIT_ENV,
+    BodyLimitMiddleware,
+    RateLimitMiddleware,
+    parse_rate,
+    proxy_hops,
+)
+from api.sandbox import TOTAL_BUDGET as SANDBOX_BUDGET
 from api.sandbox import find_interpreter_cached as find_interpreter, proof_enabled, run_proof_of_life
 from coroner.autopsy import run_autopsy
 from models import (
@@ -60,6 +68,10 @@ log = logging.getLogger("crypt_keeper")
 
 MAX_BODY_BYTES = 25_000_000
 SLOT_WAIT_SECONDS = 30.0
+# One /revive request may take at most about this long. The exhume has its own budget (api/exhumer.py), the original and
+# the revived package run in parallel within the sandbox's budget, and the retry with the original dependencies only
+# starts if a whole sandbox run still fits. Kept at or below the host's request timeout (900 s in docs/DEPLOY.md).
+REQUEST_BUDGET_SECONDS = 900.0
 _proof_slots = threading.BoundedSemaphore(int(os.environ.get("CRYPT_KEEPER_MAX_PROOFS", "4")))
 _exhume_slots = threading.BoundedSemaphore(int(os.environ.get("CRYPT_KEEPER_MAX_EXHUMES", "8")))
 
@@ -98,6 +110,17 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 # Outermost, so an oversized body is refused before anything else looks at it. It counts the bytes
 # actually received (a chunked request has no Content-Length), see api/limits.py.
 app.add_middleware(BodyLimitMiddleware, max_bytes=lambda: MAX_BODY_BYTES)
+
+
+def rate_limit_settings() -> tuple[tuple[int, float] | None, bool, int]:
+    """(requests per window or None, behind a proxy, proxy hops). On a public host the app is behind the host's proxy,
+    so the client is the address that proxy appended to X-Forwarded-For (see api/limits.py)."""
+    public = is_public(os.environ.get("CRYPT_KEEPER_PUBLIC"))
+    return parse_rate(os.environ.get(RATE_LIMIT_ENV), public), public, proxy_hops(os.environ.get(PROXY_HOPS_ENV))
+
+
+# Outermost of all: a client over its limit is turned away before anything else reads the request.
+app.add_middleware(RateLimitMiddleware, settings=rate_limit_settings)
 
 
 @app.exception_handler(ExhumeError)
@@ -182,6 +205,7 @@ _ERRORS = {
     429: {"model": ErrorResponse, "description": "GitHub rate limit reached"},
     502: {"model": ErrorResponse, "description": "PyPI or GitHub could not be reached"},
     503: {"model": ErrorResponse, "description": "Too many proof-of-life runs in progress"},
+    504: {"model": ErrorResponse, "description": "PyPI or GitHub was too slow to send the package"},
 }
 
 
@@ -276,6 +300,7 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
     ReviveResponse}. Errors propagate as exceptions.
     """
     timings: dict[str, float] = {}
+    request_started = time.perf_counter()
     target = req.target_python
 
     def start(stage: str) -> dict:
@@ -327,7 +352,11 @@ def _pipeline(req: ReviveRequest) -> Iterator[dict]:
                 else:
                     before = proof
                 yield done(stage, t, "skipped" if proof.skipped else "alive" if proof.imported else "dead", record=False)
-        if _should_retry_with_original_dependencies(snapshot, revival, before, after):
+        retry_fits = time.perf_counter() - request_started + SANDBOX_BUDGET <= REQUEST_BUDGET_SECONDS
+        if _should_retry_with_original_dependencies(snapshot, revival, before, after) and not retry_fits:
+            yield {"event": "stage", "stage": "proof_after", "status": "skipped",
+                   "detail": "no time left to retry with the original dependency limits"}
+        elif _should_retry_with_original_dependencies(snapshot, revival, before, after):
             # Do no harm: the original worked and the revival does not. Loosened version caps are the usual cause,
             # so run the revived code once more with the package's own dependency list.
             conservative = keep_original_dependencies(snapshot, revival, target, convert_python2=convert_python2_enabled())
